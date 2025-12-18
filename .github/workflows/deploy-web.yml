@@ -1,0 +1,151 @@
+name: Build & Deploy Brsti
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: eu-west-2
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-2.amazonaws.com
+  ECR_REPO_API: brsti-api
+  ECR_REPO_NGINX: brsti-nginx
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: brsti_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install ruff pytest pytest-asyncio httpx
+
+      - name: Lint backend
+        run: |
+          cd backend
+          ruff check app/
+          ruff format --check app/
+
+      - name: Test backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/brsti_test
+          JWT_SECRET_KEY: test-secret-not-for-production
+          JWT_REFRESH_SECRET_KEY: test-refresh-not-for-production
+          TMDB_API_KEY: test-key
+          ENVIRONMENT: testing
+        run: |
+          cd backend
+          pytest tests/ -v
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Lint frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run lint
+
+  build-and-push:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        run: |
+          cd backend
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPO_API:${{ github.sha }} \
+            -t $ECR_REGISTRY/$ECR_REPO_API:latest .
+          docker push $ECR_REGISTRY/$ECR_REPO_API:${{ github.sha }}
+          docker push $ECR_REGISTRY/$ECR_REPO_API:latest
+
+      - name: Build frontend + Nginx image
+        run: |
+          cd frontend
+          docker build --target build -t brsti-frontend-build .
+          docker create --name frontend-build brsti-frontend-build
+          docker cp frontend-build:/app/dist ./dist
+          docker rm frontend-build
+
+          cd ../nginx
+          cp -r ../frontend/dist ./dist
+          cat > Dockerfile.prod <<'EOF'
+          FROM nginx:1.25-alpine
+          COPY dist/ /usr/share/nginx/html/
+          COPY nginx.conf /etc/nginx/nginx.conf
+          EXPOSE 80
+          CMD ["nginx", "-g", "daemon off;"]
+          EOF
+          docker build -f Dockerfile.prod \
+            -t $ECR_REGISTRY/$ECR_REPO_NGINX:${{ github.sha }} \
+            -t $ECR_REGISTRY/$ECR_REPO_NGINX:latest .
+          docker push $ECR_REGISTRY/$ECR_REPO_NGINX:${{ github.sha }}
+          docker push $ECR_REGISTRY/$ECR_REPO_NGINX:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region eu-west-2 | \
+              docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_API }}:latest
+            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_NGINX }}:latest
+
+            cd /opt/brsti
+
+            export IMAGE_TAG=latest
+            export ECR_REGISTRY=${{ env.ECR_REGISTRY }}
+            export ECR_REPO_API=${{ env.ECR_REPO_API }}
+            export ECR_REPO_NGINX=${{ env.ECR_REPO_NGINX }}
+
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            docker image prune -af --filter "until=24h"
+
+            sleep 10
+            curl -sf http://localhost/health || echo "Health check failed!"
