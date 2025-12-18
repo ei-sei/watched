@@ -43,6 +43,8 @@ func (h *MediaHandler) List(w http.ResponseWriter, r *http.Request) {
 	if search := q.Get("q"); search != "" {
 		f.Search = &search
 	}
+	f.Sort = q.Get("sort")
+	f.Order = q.Get("order")
 	f.Page, _ = strconv.Atoi(q.Get("page"))
 	f.PerPage, _ = strconv.Atoi(q.Get("per_page"))
 
