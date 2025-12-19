@@ -11,6 +11,7 @@ type User struct {
 	AvatarURL      *string    `json:"avatar_url"`
 	IsAdmin        bool       `json:"is_admin"`
 	IsPremium      bool       `json:"is_premium"`
+	IsPublic       bool       `json:"is_public"`
 	FailedAttempts int        `json:"-"`
 	LockedUntil    *time.Time `json:"-"`
 	CreatedAt      time.Time  `json:"created_at"`

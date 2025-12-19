@@ -44,7 +44,7 @@ func main() {
 
 	// Handlers
 	authH   := handler.NewAuthHandler(userRepo, cfg)
-	userH   := handler.NewUserHandler(userRepo, cfg)
+	userH   := handler.NewUserHandler(userRepo, mediaRepo, cfg)
 	mediaH  := handler.NewMediaHandler(mediaRepo, episodeRepo, chapterRepo)
 	listH   := handler.NewListHandler(listRepo, mediaRepo)
 	searchH := handler.NewSearchHandler(cfg)
@@ -70,8 +70,9 @@ func main() {
 		w.Write([]byte("ok")) //nolint:errcheck
 	})
 
-	// Public share routes — no auth
+	// Public routes — no auth
 	r.Get("/share/lists/{id}", shareH.GetList)
+	r.Get("/u/{username}", userH.PublicProfile)
 
 	// Public auth routes
 	r.Route("/auth", func(r chi.Router) {

@@ -96,7 +96,7 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="What did you think of this chapter?"
+                  placeholder="What are your thoughts?"
                   rows={3}
                   className="w-full bg-[#111] text-zinc-200 text-sm rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-white/20 placeholder:text-zinc-600 resize-none"
                 />
@@ -133,8 +133,6 @@ export default function ChapterTracker({ mediaId }: Props) {
     queryFn: () => chaptersApi.list(mediaId).then((r) => r.data),
   })
 
-  const [form, setForm] = useState({ chapter_number: '', chapter_title: '', start_page: '', end_page: '' })
-  const [formError, setFormError] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [importCount, setImportCount] = useState('')
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
@@ -148,31 +146,6 @@ export default function ChapterTracker({ mediaId }: Props) {
       setImportCount('')
     },
   })
-
-  const addChapter = useMutation({
-    mutationFn: () =>
-      chaptersApi.upsert(mediaId, {
-        chapter_number: +form.chapter_number,
-        chapter_title: form.chapter_title || undefined,
-        start_page: form.start_page ? +form.start_page : undefined,
-        end_page: form.end_page ? +form.end_page : undefined,
-        status: 'unread',
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['chapters', mediaId] })
-      setForm({ chapter_number: '', chapter_title: '', start_page: '', end_page: '' })
-      setFormError('')
-    },
-  })
-
-  function handleAdd() {
-    if (!form.chapter_number || +form.chapter_number < 1) {
-      setFormError('Chapter number is required.')
-      return
-    }
-    setFormError('')
-    addChapter.mutate()
-  }
 
   if (isLoading) return <LoadingSpinner />
 
@@ -257,59 +230,6 @@ export default function ChapterTracker({ mediaId }: Props) {
         </div>
       )}
 
-      {/* Add chapter form */}
-      <div className="bg-[#1a1a1a] rounded-lg ring-1 ring-white/[0.06] p-3 space-y-3">
-        <p className="text-xs font-medium text-zinc-500">Add chapter</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-xs text-zinc-600 mb-1">Number *</label>
-            <input
-              type="number"
-              min={1}
-              value={form.chapter_number}
-              onChange={(e) => setForm((f) => ({ ...f, chapter_number: e.target.value }))}
-              className="w-full bg-[#111] text-zinc-200 text-sm rounded-md px-3 py-1.5 border border-white/[0.08] focus:outline-none focus:border-white/20"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-600 mb-1">Title</label>
-            <input
-              type="text"
-              value={form.chapter_title}
-              onChange={(e) => setForm((f) => ({ ...f, chapter_title: e.target.value }))}
-              className="w-full bg-[#111] text-zinc-200 text-sm rounded-md px-3 py-1.5 border border-white/[0.08] focus:outline-none focus:border-white/20"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-600 mb-1">Start page</label>
-            <input
-              type="number"
-              min={1}
-              value={form.start_page}
-              onChange={(e) => setForm((f) => ({ ...f, start_page: e.target.value }))}
-              className="w-full bg-[#111] text-zinc-200 text-sm rounded-md px-3 py-1.5 border border-white/[0.08] focus:outline-none focus:border-white/20"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-zinc-600 mb-1">End page</label>
-            <input
-              type="number"
-              min={1}
-              value={form.end_page}
-              onChange={(e) => setForm((f) => ({ ...f, end_page: e.target.value }))}
-              className="w-full bg-[#111] text-zinc-200 text-sm rounded-md px-3 py-1.5 border border-white/[0.08] focus:outline-none focus:border-white/20"
-            />
-          </div>
-        </div>
-        {formError && <p className="text-xs text-red-400">{formError}</p>}
-        <button
-          onClick={handleAdd}
-          disabled={addChapter.isPending}
-          className="w-full text-sm bg-white/[0.06] hover:bg-white/10 disabled:opacity-50 text-zinc-200 px-3 py-1.5 rounded-md transition-colors"
-        >
-          {addChapter.isPending ? 'Adding…' : '+ Add chapter'}
-        </button>
-      </div>
     </div>
   )
 }

@@ -5,6 +5,7 @@ export interface User {
   avatar_url: string | null
   is_admin: boolean
   is_premium: boolean
+  is_public: boolean
   created_at: string
 }
 

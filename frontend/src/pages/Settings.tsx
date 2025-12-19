@@ -8,6 +8,7 @@ export default function Settings() {
   const { user } = useAuth()
   const { show } = useToast()
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
+  const [isPublic, setIsPublic] = useState(user?.is_public ?? false)
   const [pw, setPw] = useState({ current: '', next: '' })
   const [malUsername, setMalUsername] = useState('')
   const [importing, setImporting] = useState(false)
@@ -19,6 +20,17 @@ export default function Settings() {
       show('Profile updated', 'success')
     } catch {
       show('Failed to update profile', 'error')
+    }
+  }
+
+  const togglePublic = async (val: boolean) => {
+    setIsPublic(val)
+    try {
+      await authApi.updateMe({ is_public: val })
+      show(val ? 'Profile is now public' : 'Profile is now private', 'success')
+    } catch {
+      setIsPublic(!val)
+      show('Failed to update privacy', 'error')
     }
   }
 
@@ -93,6 +105,49 @@ export default function Settings() {
           />
         </div>
         <button onClick={saveProfile} className={btnClass}>Save</button>
+      </div>
+
+      {/* Privacy */}
+      <div className={sectionClass}>
+        <h2 className="text-sm font-medium text-zinc-300">Privacy</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-zinc-300">Public profile</p>
+            <p className="text-xs text-zinc-600 mt-0.5">
+              {isPublic
+                ? `Anyone can view your library at /u/${user?.username}`
+                : 'Only you can see your library'}
+            </p>
+          </div>
+          <button
+            onClick={() => togglePublic(!isPublic)}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${
+              isPublic ? 'bg-indigo-600' : 'bg-white/10'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${
+                isPublic ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+        {isPublic && (
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs text-zinc-400 bg-[#111] px-3 py-1.5 rounded-md border border-white/[0.06] truncate">
+              {window.location.origin}/u/{user?.username}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/u/${user?.username}`)
+                show('Link copied', 'success')
+              }}
+              className={btnClass}
+            >
+              Copy
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Change password */}
