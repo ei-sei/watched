@@ -142,6 +142,16 @@ func (r *ChapterRepo) Delete(ctx context.Context, id, mediaItemID int) error {
 	return nil
 }
 
+// DeleteEmptyAbove removes chapters with chapter_number > threshold that have no note.
+// Used when re-importing to trim excess empty placeholder chapters.
+func (r *ChapterRepo) DeleteEmptyAbove(ctx context.Context, mediaItemID, threshold int) error {
+	_, err := r.db.Exec(ctx,
+		`DELETE FROM book_chapter_logs
+		 WHERE media_item_id = $1 AND chapter_number > $2 AND (note IS NULL OR note = '')`,
+		mediaItemID, threshold)
+	return err
+}
+
 func (r *ChapterRepo) BulkUpsert(ctx context.Context, mediaItemID int, inputs []UpsertChapterInput) (int, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

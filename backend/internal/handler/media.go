@@ -400,6 +400,12 @@ func (h *MediaHandler) ImportChapters(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Trim empty chapters that exceed the new count
+	if err := h.chapters.DeleteEmptyAbove(r.Context(), id, len(inputs)); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	n, err := h.chapters.BulkUpsert(r.Context(), id, inputs)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
