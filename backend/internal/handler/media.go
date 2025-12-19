@@ -1,8 +1,13 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/ei-sei/brsti/internal/auth"
 	"github.com/ei-sei/brsti/internal/models"
@@ -16,10 +21,15 @@ type MediaHandler struct {
 	episodes *repository.EpisodeRepo
 	chapters *repository.ChapterRepo
 	validate *validator.Validate
+	client   *http.Client
 }
 
 func NewMediaHandler(media *repository.MediaRepo, episodes *repository.EpisodeRepo, chapters *repository.ChapterRepo) *MediaHandler {
-	return &MediaHandler{media: media, episodes: episodes, chapters: chapters, validate: validator.New()}
+	return &MediaHandler{
+		media: media, episodes: episodes, chapters: chapters,
+		validate: validator.New(),
+		client:   &http.Client{Timeout: 8 * time.Second},
+	}
 }
 
 func userIDFrom(r *http.Request) int {
@@ -343,4 +353,99 @@ func (h *MediaHandler) DeleteChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /media/{id}/chapters/import
+func (h *MediaHandler) ImportChapters(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var body struct {
+		Count int `json:"count"`
+	}
+	_ = decode(r, &body)
+
+	item, err := h.media.GetByID(r.Context(), id, userIDFrom(r))
+	if err != nil || item == nil {
+		jsonErr(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	var inputs []repository.UpsertChapterInput
+	source := "manual"
+
+	// Try Open Library TOC if the book was added from Open Library
+	if item.ExternalID != nil && strings.HasPrefix(*item.ExternalID, "ol:") {
+		olKey := strings.TrimPrefix(*item.ExternalID, "ol:")
+		if toc, err := fetchOLChapters(r.Context(), h.client, olKey); err == nil && len(toc) > 0 {
+			inputs = toc
+			source = "openlibrary"
+		}
+	}
+
+	// Fallback: generate numbered chapters from count
+	if len(inputs) == 0 {
+		if body.Count < 1 || body.Count > 5000 {
+			jsonErr(w, http.StatusBadRequest, "count must be between 1 and 5000")
+			return
+		}
+		for i := 1; i <= body.Count; i++ {
+			inputs = append(inputs, repository.UpsertChapterInput{
+				ChapterNumber: i,
+				Status:        models.ChapterUnread,
+			})
+		}
+	}
+
+	n, err := h.chapters.BulkUpsert(r.Context(), id, inputs)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, map[string]any{"source": source, "imported": n})
+}
+
+func fetchOLChapters(ctx context.Context, client *http.Client, olKey string) ([]repository.UpsertChapterInput, error) {
+	// olKey is like /works/OL123W
+	u := fmt.Sprintf("https://openlibrary.org%s.json", olKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var raw struct {
+		TableOfContents []struct {
+			Title   string `json:"title"`
+			Level   int    `json:"level"`
+			PageNum string `json:"pagenum"`
+		} `json:"table_of_contents"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+
+	var inputs []repository.UpsertChapterInput
+	chNum := 0
+	for _, toc := range raw.TableOfContents {
+		title := strings.TrimSpace(toc.Title)
+		if title == "" {
+			continue
+		}
+		chNum++
+		t := title
+		inputs = append(inputs, repository.UpsertChapterInput{
+			ChapterNumber: chNum,
+			ChapterTitle:  &t,
+			Status:        models.ChapterUnread,
+		})
+	}
+	return inputs, nil
 }

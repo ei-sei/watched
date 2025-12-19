@@ -108,6 +108,7 @@ func main() {
 				r.Get("/chapters", mediaH.ListChapters)
 				r.Put("/chapters", mediaH.UpsertChapter)
 				r.Delete("/chapters/{chID}", mediaH.DeleteChapter)
+				r.Post("/chapters/import", mediaH.ImportChapters)
 			})
 		})
 
