@@ -24,6 +24,10 @@ export default function Search() {
 
   const handleAdd = async (result: ApiSearchResult) => {
     try {
+      const totalProgress = typeof result.extra?.episodes === 'number' && result.extra.episodes > 0
+        ? result.extra.episodes
+        : undefined
+
       await create.mutateAsync({
         media_type: result.media_type as MediaType,
         external_id: result.external_id,
@@ -32,6 +36,7 @@ export default function Search() {
         poster_url: result.poster_url ?? undefined,
         metadata: result.extra,
         status: 'want_to',
+        total_progress: totalProgress,
       })
       show(`"${result.title}" added to library`, 'success')
     } catch (err: unknown) {

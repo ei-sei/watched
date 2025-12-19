@@ -35,7 +35,7 @@ export default function MediaLibrary({ type }: Props) {
     sort,
     order: 'desc',
     page,
-    per_page: 24,
+    per_page: 50,
     q: debouncedSearch || undefined,
   })
 

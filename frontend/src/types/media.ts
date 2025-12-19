@@ -16,6 +16,8 @@ export interface MediaItem {
   review_text: string | null
   started_at: string | null
   completed_at: string | null
+  current_progress: number | null
+  total_progress: number | null
   created_at: string
   updated_at: string
 }

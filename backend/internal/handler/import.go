@@ -258,14 +258,24 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 		poster := h.jikanPoster(ctx, a.ID)
 		time.Sleep(350 * time.Millisecond)
 
+		var currentProgress, totalProgress *int
+		if a.Watched > 0 {
+			currentProgress = &a.Watched
+		}
+		if a.Episodes > 0 {
+			totalProgress = &a.Episodes
+		}
+
 		in := repository.CreateMediaInput{
-			UserID:     userID,
-			MediaType:  models.MediaTypeAnime,
-			ExternalID: &externalID,
-			Title:      a.Title,
-			PosterURL:  poster,
-			Status:     status,
-			Metadata:   map[string]any{"mal_id": a.ID},
+			UserID:          userID,
+			MediaType:       models.MediaTypeAnime,
+			ExternalID:      &externalID,
+			Title:           a.Title,
+			PosterURL:       poster,
+			Status:          status,
+			Metadata:        map[string]any{"mal_id": a.ID, "episodes": a.Episodes},
+			CurrentProgress: currentProgress,
+			TotalProgress:   totalProgress,
 		}
 
 		created, err := h.media.Create(ctx, in)

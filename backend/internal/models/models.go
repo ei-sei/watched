@@ -35,21 +35,23 @@ const (
 )
 
 type MediaItem struct {
-	ID          int            `json:"id"`
-	UserID      int            `json:"user_id"`
-	MediaType   MediaType      `json:"media_type"`
-	ExternalID  *string        `json:"external_id"`
-	Title       string         `json:"title"`
-	Year        *int           `json:"year"`
-	PosterURL   *string        `json:"poster_url"`
-	Metadata    map[string]any `json:"metadata"`
-	Status      MediaStatus    `json:"status"`
-	Rating      *float64       `json:"rating"`
-	ReviewText  *string        `json:"review_text"`
-	StartedAt   *time.Time     `json:"started_at"`
-	CompletedAt *time.Time     `json:"completed_at"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	ID              int            `json:"id"`
+	UserID          int            `json:"user_id"`
+	MediaType       MediaType      `json:"media_type"`
+	ExternalID      *string        `json:"external_id"`
+	Title           string         `json:"title"`
+	Year            *int           `json:"year"`
+	PosterURL       *string        `json:"poster_url"`
+	Metadata        map[string]any `json:"metadata"`
+	Status          MediaStatus    `json:"status"`
+	Rating          *float64       `json:"rating"`
+	ReviewText      *string        `json:"review_text"`
+	StartedAt       *time.Time     `json:"started_at"`
+	CompletedAt     *time.Time     `json:"completed_at"`
+	CurrentProgress *int           `json:"current_progress"`
+	TotalProgress   *int           `json:"total_progress"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 type TvEpisodeLog struct {
