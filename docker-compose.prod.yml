@@ -51,6 +51,10 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
     depends_on:
       - api
     networks:
@@ -60,8 +64,24 @@ services:
         limits:
           memory: 64M
 
+  certbot:
+    image: certbot/certbot:latest
+    container_name: brsti-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
 volumes:
   pg_data:
+    driver: local
+  letsencrypt:
+    driver: local
+  certbot_webroot:
     driver: local
 
 networks:
