@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useUpdateMedia } from '@/hooks/useMedia'
 import type { MediaItem, MediaType } from '@/types/media'
 
@@ -28,12 +28,6 @@ export default function ProgressTracker({ item }: Props) {
 
   const [current, setCurrent] = useState<number | ''>(item.current_progress ?? '')
   const [total, setTotal] = useState<number | ''>(getDefaultTotal(item))
-
-  // Sync if item changes (e.g. after a save)
-  useEffect(() => {
-    setCurrent(item.current_progress ?? '')
-    setTotal(getDefaultTotal(item))
-  }, [item.current_progress, item.total_progress])
 
   const save = (newCurrent: number | '', newTotal: number | '') => {
     update.mutate({
