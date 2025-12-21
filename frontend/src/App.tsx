@@ -17,6 +17,7 @@ import MediaDetail from '@/pages/MediaDetail'
 import Search from '@/pages/Search'
 import Stats from '@/pages/Stats'
 import Settings from '@/pages/Settings'
+import Admin from '@/pages/Admin'
 import SharedList from '@/pages/SharedList'
 import PublicProfile from '@/pages/PublicProfile'
 
@@ -86,6 +87,7 @@ export default function App() {
                 <Route path="search" element={<Search />} />
                 <Route path="stats" element={<Stats />} />
                 <Route path="settings" element={<Settings />} />
+                <Route path="admin" element={<Admin />} />
               </Route>
             </Routes>
           </BrowserRouter>

@@ -1,0 +1,158 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { adminApi } from '@/api/admin'
+import { useToast } from '@/components/ui/Toast'
+import { Copy, RefreshCw } from 'lucide-react'
+
+type Tab = 'invites' | 'users'
+
+function randomCode() {
+  return Math.random().toString(36).slice(2, 10).toUpperCase() +
+         Math.random().toString(36).slice(2, 6).toUpperCase()
+}
+
+export default function Admin() {
+  const [tab, setTab] = useState<Tab>('invites')
+  const [newCode, setNewCode] = useState(randomCode)
+  const { show } = useToast()
+  const qc = useQueryClient()
+
+  const invites = useQuery({ queryKey: ['admin', 'invites'], queryFn: () => adminApi.listInvites().then(r => r.data) })
+  const users   = useQuery({ queryKey: ['admin', 'users'],   queryFn: () => adminApi.listUsers().then(r => r.data), enabled: tab === 'users' })
+
+  const createInvite = useMutation({
+    mutationFn: () => adminApi.createInvite(newCode),
+    onSuccess: () => {
+      show(`Invite code "${newCode}" created`, 'success')
+      setNewCode(randomCode())
+      qc.invalidateQueries({ queryKey: ['admin', 'invites'] })
+    },
+    onError: () => show('Code already exists', 'error'),
+  })
+
+  const updateFlags = useMutation({
+    mutationFn: ({ id, flags }: { id: number; flags: { is_admin?: boolean; is_premium?: boolean } }) =>
+      adminApi.updateFlags(id, flags),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
+    onError: () => show('Failed to update user', 'error'),
+  })
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    show('Copied to clipboard', 'success')
+  }
+
+  const tabClass = (t: Tab) =>
+    `px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+      tab === t ? 'bg-white/10 text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+    }`
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <h1 className="text-2xl font-semibold text-white tracking-tight">Admin</h1>
+
+      <div className="flex gap-1.5">
+        <button className={tabClass('invites')} onClick={() => setTab('invites')}>Invite Codes</button>
+        <button className={tabClass('users')}   onClick={() => setTab('users')}>Users</button>
+      </div>
+
+      {tab === 'invites' && (
+        <div className="space-y-4">
+          {/* Generate */}
+          <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
+            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">New Code</p>
+            <div className="flex gap-2">
+              <input
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                className="flex-1 bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm font-mono"
+              />
+              <button
+                onClick={() => setNewCode(randomCode())}
+                className="p-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/5 rounded-md transition-colors"
+                title="Regenerate"
+              >
+                <RefreshCw size={15} />
+              </button>
+              <button
+                onClick={() => createInvite.mutate()}
+                disabled={createInvite.isPending || newCode.length < 8}
+                className="px-4 py-2 bg-white/10 hover:bg-white/15 disabled:opacity-40 text-white text-sm rounded-md transition-colors"
+              >
+                Create
+              </button>
+            </div>
+            <p className="text-xs text-zinc-600">Share the link: brsti.uk/register?invite={newCode}</p>
+          </div>
+
+          {/* List */}
+          {invites.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
+          {invites.data && (
+            <div className="space-y-1.5">
+              {invites.data.length === 0 && (
+                <p className="text-zinc-600 text-sm text-center py-8">No invite codes yet</p>
+              )}
+              {invites.data.map((inv) => (
+                <div key={inv.code} className={`flex items-center gap-3 rounded-lg px-4 py-3 ring-1 ${inv.used_at ? 'bg-[#141414] ring-white/[0.04]' : 'bg-[#1a1a1a] ring-white/[0.06]'}`}>
+                  <span className={`font-mono text-sm flex-1 ${inv.used_at ? 'text-zinc-600 line-through' : 'text-zinc-200'}`}>
+                    {inv.code}
+                  </span>
+                  {inv.used_at ? (
+                    <span className="text-xs text-zinc-600">Used</span>
+                  ) : (
+                    <>
+                      <span className="text-xs text-emerald-600">Unused</span>
+                      <button
+                        onClick={() => copyToClipboard(`https://brsti.uk/register?invite=${inv.code}`)}
+                        className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors"
+                        title="Copy invite link"
+                      >
+                        <Copy size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'users' && (
+        <div className="space-y-1.5">
+          {users.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
+          {users.data?.map((u) => (
+            <div key={u.id} className="flex items-center gap-3 bg-[#1a1a1a] rounded-lg px-4 py-3 ring-1 ring-white/[0.06]">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
+                {u.display_name && u.display_name !== u.username && (
+                  <p className="text-xs text-zinc-600">{u.display_name}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={u.is_admin}
+                    onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_admin: e.target.checked } })}
+                    className="rounded"
+                  />
+                  Admin
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={u.is_premium}
+                    onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_premium: e.target.checked } })}
+                    className="rounded"
+                  />
+                  Premium
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

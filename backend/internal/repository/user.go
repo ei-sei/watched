@@ -107,6 +107,24 @@ func (r *UserRepo) List(ctx context.Context) ([]models.User, error) {
 }
 
 // Invite code helpers
+func (r *UserRepo) ListInvites(ctx context.Context) ([]models.InviteCode, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT code, created_at, used_at FROM invite_codes ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var codes []models.InviteCode
+	for rows.Next() {
+		var c models.InviteCode
+		if err := rows.Scan(&c.Code, &c.CreatedAt, &c.UsedAt); err != nil {
+			return nil, err
+		}
+		codes = append(codes, c)
+	}
+	return codes, nil
+}
+
 func (r *UserRepo) CreateInvite(ctx context.Context, code string) error {
 	_, err := r.db.Exec(ctx, `INSERT INTO invite_codes (code) VALUES ($1)`, code)
 	return err

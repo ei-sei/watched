@@ -180,7 +180,7 @@ export default function Settings() {
             <input
               value={malUsername}
               onChange={(e) => setMalUsername(e.target.value)}
-              placeholder="e.g. sheikh"
+              placeholder="e.g. animeboy"
               className={inputClass}
             />
             <p className="text-xs text-zinc-700 mt-1.5">Requires MAL_CLIENT_ID to be set on the server.</p>

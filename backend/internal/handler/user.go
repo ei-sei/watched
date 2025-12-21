@@ -6,6 +6,7 @@ import (
 
 	"github.com/ei-sei/brsti/internal/auth"
 	"github.com/ei-sei/brsti/internal/config"
+	"github.com/ei-sei/brsti/internal/models"
 	"github.com/ei-sei/brsti/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -167,6 +168,19 @@ func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, user)
+}
+
+// GET /admin/invites
+func (h *UserHandler) AdminListInvites(w http.ResponseWriter, r *http.Request) {
+	codes, err := h.users.ListInvites(r.Context())
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if codes == nil {
+		codes = []models.InviteCode{}
+	}
+	jsonOK(w, codes)
 }
 
 // POST /admin/invites
