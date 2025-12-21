@@ -2,9 +2,7 @@ version: "3.9"
 
 services:
   api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/ei-sei/watched-api:latest
     container_name: watched-api
     restart: always
     environment:
@@ -24,19 +22,11 @@ services:
           memory: 128M
 
   nginx:
-    build:
-      context: .
-      dockerfile: Dockerfile.web
-      args:
-        VITE_API_URL: ${VITE_API_URL:?Set VITE_API_URL in .env}
+    image: ghcr.io/ei-sei/watched-web:latest
     container_name: watched-nginx
     restart: always
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - letsencrypt:/etc/letsencrypt:ro
-      - certbot_webroot:/var/www/certbot:ro
     depends_on:
       - api
     networks:
@@ -45,24 +35,6 @@ services:
       resources:
         limits:
           memory: 64M
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: watched-certbot
-    volumes:
-      - letsencrypt:/etc/letsencrypt
-      - certbot_webroot:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-
-volumes:
-  letsencrypt:
-    driver: local
-  certbot_webroot:
-    driver: local
 
 networks:
   watched_net:
