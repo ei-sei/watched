@@ -130,19 +130,21 @@ export default function Admin() {
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none">
+                <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={u.is_admin}
+                    disabled={u.username === 'admin'}
                     onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_admin: e.target.checked } })}
                     className="rounded"
                   />
                   Admin
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none">
+                <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={u.is_premium}
+                    disabled={u.username === 'admin'}
                     onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_premium: e.target.checked } })}
                     className="rounded"
                   />
