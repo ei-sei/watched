@@ -180,6 +180,29 @@ func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, user)
 }
 
+// DELETE /admin/users/{id}
+func (h *UserHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	target, err := h.users.GetByID(r.Context(), id)
+	if err != nil || target == nil {
+		jsonErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.Username == "admin" {
+		jsonErr(w, http.StatusForbidden, "cannot delete the admin account")
+		return
+	}
+	if err := h.users.Delete(r.Context(), id); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // GET /admin/invites
 func (h *UserHandler) AdminListInvites(w http.ResponseWriter, r *http.Request) {
 	codes, err := h.users.ListInvites(r.Context())

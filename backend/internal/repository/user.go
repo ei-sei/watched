@@ -106,6 +106,11 @@ func (r *UserRepo) List(ctx context.Context) ([]models.User, error) {
 	return users, nil
 }
 
+func (r *UserRepo) Delete(ctx context.Context, id int) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+	return err
+}
+
 // Invite code helpers
 func (r *UserRepo) ListInvites(ctx context.Context) ([]models.InviteCode, error) {
 	rows, err := r.db.Query(ctx,

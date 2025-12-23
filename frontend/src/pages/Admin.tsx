@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/api/admin'
 import { useToast } from '@/components/ui/Toast'
-import { Copy, RefreshCw } from 'lucide-react'
+import { Copy, RefreshCw, Trash2 } from 'lucide-react'
 
 type Tab = 'invites' | 'users'
 
@@ -11,9 +11,53 @@ function randomCode() {
          Math.random().toString(36).slice(2, 6).toUpperCase()
 }
 
+function ConfirmDeleteModal({ username, onConfirm, onCancel }: {
+  username: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const [input, setInput] = useState('')
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+      <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
+        <h2 className="text-white font-semibold">Delete user</h2>
+        <p className="text-zinc-400 text-sm">
+          This will permanently delete <span className="text-white font-medium">{username}</span> and all their data. This cannot be undone.
+        </p>
+        <div>
+          <p className="text-zinc-500 text-xs mb-1.5">Type <span className="text-white font-mono">{username}</span> to confirm</p>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-red-500/50 text-sm font-mono"
+            placeholder={username}
+            autoFocus
+          />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={input !== username}
+            className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-md transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('invites')
   const [newCode, setNewCode] = useState(randomCode)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; username: string } | null>(null)
   const { show } = useToast()
   const qc = useQueryClient()
 
@@ -37,6 +81,16 @@ export default function Admin() {
     onError: () => show('Failed to update user', 'error'),
   })
 
+  const deleteUser = useMutation({
+    mutationFn: (id: number) => adminApi.deleteUser(id),
+    onSuccess: () => {
+      show(`User deleted`, 'success')
+      setDeleteTarget(null)
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+    onError: () => show('Failed to delete user', 'error'),
+  })
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     show('Copied to clipboard', 'success')
@@ -58,7 +112,6 @@ export default function Admin() {
 
       {tab === 'invites' && (
         <div className="space-y-4">
-          {/* Generate */}
           <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
             <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">New Code</p>
             <div className="flex gap-2">
@@ -85,7 +138,6 @@ export default function Admin() {
             <p className="text-xs text-zinc-600">Share the link: brsti.uk/register?invite={newCode}</p>
           </div>
 
-          {/* List */}
           {invites.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
           {invites.data && (
             <div className="space-y-1.5">
@@ -150,10 +202,27 @@ export default function Admin() {
                   />
                   Premium
                 </label>
+                {u.username !== 'admin' && (
+                  <button
+                    onClick={() => setDeleteTarget({ id: u.id, username: u.username })}
+                    className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
+                    title="Delete user"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          username={deleteTarget.username}
+          onConfirm={() => deleteUser.mutate(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   )
