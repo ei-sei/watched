@@ -4,6 +4,7 @@ import { storage } from '@/platform/storage'
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   withCredentials: true,
+  timeout: 15000,
 })
 
 client.interceptors.request.use(async (config) => {
