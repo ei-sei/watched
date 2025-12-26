@@ -139,7 +139,7 @@ export default function MediaDetail() {
           )}
         </div>
       )}
-      {item.media_type === 'tv_show' && <EpisodeTracker mediaId={item.id} />}
+      {item.media_type === 'tv_show' && <EpisodeTracker item={item} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
     </div>
   )
