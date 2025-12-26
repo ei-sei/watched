@@ -5,6 +5,7 @@ import { useMediaItem, useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
 import EpisodeTracker from '@/components/tracking/EpisodeTracker'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
 import ProgressTracker from '@/components/tracking/ProgressTracker'
+import TVSeasonProgress from '@/components/tracking/TVSeasonProgress'
 import StatusBadge from '@/components/ui/StatusBadge'
 import RatingDisplay from '@/components/ui/RatingDisplay'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -120,7 +121,12 @@ export default function MediaDetail() {
 
       {(item.media_type === 'book' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
         <div className="space-y-2">
-          <ProgressTracker key={`${item.id}-${item.current_progress}-${item.total_progress}`} item={item} />
+          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Progress</h3>
+          {item.media_type === 'tv_show' ? (
+            <TVSeasonProgress item={item} />
+          ) : (
+            <ProgressTracker key={`${item.id}-${item.current_progress}-${item.total_progress}`} item={item} />
+          )}
           {item.media_type === 'tv_show' && item.external_id?.startsWith('tmdb:') && (
             <button
               onClick={handleRefresh}

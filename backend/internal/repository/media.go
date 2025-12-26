@@ -197,6 +197,7 @@ type UpdateMediaInput struct {
 	CompletedAt     *string
 	CurrentProgress *int
 	TotalProgress   *int
+	Metadata        map[string]any
 }
 
 func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaInput) (*models.MediaItem, error) {
@@ -230,6 +231,10 @@ func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaIn
 	if in.TotalProgress != nil {
 		args = append(args, *in.TotalProgress)
 		sets = append(sets, fmt.Sprintf("total_progress = $%d", len(args)))
+	}
+	if in.Metadata != nil {
+		args = append(args, in.Metadata)
+		sets = append(sets, fmt.Sprintf("metadata = $%d", len(args)))
 	}
 
 	query := fmt.Sprintf(
