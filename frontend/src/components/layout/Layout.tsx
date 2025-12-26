@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
+import { VERSION } from '@/version'
 
 export default function Layout() {
   return (
@@ -19,6 +20,11 @@ export default function Layout() {
 
       {/* Mobile bottom nav */}
       <BottomNav />
+
+      {/* Version badge */}
+      <span className="fixed bottom-2 right-2 text-[10px] text-zinc-700 select-none pointer-events-none">
+        v{VERSION}
+      </span>
     </div>
   )
 }
