@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMediaItem, useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
 import EpisodeTracker from '@/components/tracking/EpisodeTracker'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
@@ -6,8 +8,20 @@ import ProgressTracker from '@/components/tracking/ProgressTracker'
 import StatusBadge from '@/components/ui/StatusBadge'
 import RatingDisplay from '@/components/ui/RatingDisplay'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
+import { mediaApi } from '@/api/media'
+import { RefreshCw } from 'lucide-react'
 import type { MediaStatus } from '@/types/media'
+
+const REFRESH_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour
+
+function getLastRefresh(itemId: number): number {
+  return parseInt(localStorage.getItem(`tmdb_refresh_${itemId}`) ?? '0', 10)
+}
+function setLastRefresh(itemId: number) {
+  localStorage.setItem(`tmdb_refresh_${itemId}`, Date.now().toString())
+}
 
 const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'dropped', 'on_hold']
 
@@ -17,14 +31,45 @@ export default function MediaDetail() {
   const { data: item, isLoading } = useMediaItem(Number(id))
   const update = useUpdateMedia()
   const remove = useDeleteMedia()
+  const qc = useQueryClient()
+  const { show } = useToast()
+  const [refreshing, setRefreshing] = useState(false)
 
   if (isLoading) return <LoadingSpinner />
   if (!item) return <div className="text-slate-400">Not found</div>
+
+  const lastRefresh = getLastRefresh(item.id)
+  const cooldownRemaining = REFRESH_COOLDOWN_MS - (Date.now() - lastRefresh)
+  const onCooldown = cooldownRemaining > 0
 
   const handleDelete = async () => {
     if (!confirm('Remove from library?')) return
     await remove.mutateAsync(item.id)
     navigate(-1)
+  }
+
+  const handleRefresh = async () => {
+    if (onCooldown) {
+      const mins = Math.ceil(cooldownRemaining / 60000)
+      show(`Please wait ${mins} minute${mins !== 1 ? 's' : ''} before refreshing again`, 'error')
+      return
+    }
+    const oldTotal = item.total_progress
+    setRefreshing(true)
+    try {
+      const { data: updated } = await mediaApi.refreshFromTMDB(item.id)
+      setLastRefresh(item.id)
+      qc.invalidateQueries({ queryKey: ['media', item.id] })
+      if (updated.total_progress === oldTotal) {
+        show('No new episodes — count is up to date', 'info')
+      } else {
+        show(`Updated: ${oldTotal ?? '?'} → ${updated.total_progress} episodes`, 'success')
+      }
+    } catch {
+      show('Could not fetch from TMDB', 'error')
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   return (
@@ -74,7 +119,19 @@ export default function MediaDetail() {
       </div>
 
       {(item.media_type === 'book' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
-        <ProgressTracker key={`${item.id}-${item.current_progress}-${item.total_progress}`} item={item} />
+        <div className="space-y-2">
+          <ProgressTracker key={`${item.id}-${item.current_progress}-${item.total_progress}`} item={item} />
+          {item.media_type === 'tv_show' && item.external_id?.startsWith('tmdb:') && (
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing || onCooldown}
+              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Updating…' : onCooldown ? `Refresh available in ${Math.ceil(cooldownRemaining / 60000)}m` : 'Refresh episode count from TMDB'}
+            </button>
+          )}
+        </div>
       )}
       {item.media_type === 'tv_show' && <EpisodeTracker mediaId={item.id} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}

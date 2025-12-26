@@ -22,14 +22,39 @@ type MediaHandler struct {
 	chapters *repository.ChapterRepo
 	validate *validator.Validate
 	client   *http.Client
+	tmdbKey  string
 }
 
-func NewMediaHandler(media *repository.MediaRepo, episodes *repository.EpisodeRepo, chapters *repository.ChapterRepo) *MediaHandler {
+func NewMediaHandler(media *repository.MediaRepo, episodes *repository.EpisodeRepo, chapters *repository.ChapterRepo, tmdbKey string) *MediaHandler {
 	return &MediaHandler{
 		media: media, episodes: episodes, chapters: chapters,
 		validate: validator.New(),
 		client:   &http.Client{Timeout: 8 * time.Second},
+		tmdbKey:  tmdbKey,
 	}
+}
+
+func (h *MediaHandler) fetchTMDBEpisodes(ctx context.Context, tmdbID string) *int {
+	if h.tmdbKey == "" {
+		return nil
+	}
+	u := fmt.Sprintf("https://api.themoviedb.org/3/tv/%s?api_key=%s", tmdbID, h.tmdbKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		NumberOfEpisodes *int `json:"number_of_episodes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil
+	}
+	return raw.NumberOfEpisodes
 }
 
 func userIDFrom(r *http.Request) int {
@@ -69,13 +94,15 @@ func (h *MediaHandler) List(w http.ResponseWriter, r *http.Request) {
 // POST /media
 func (h *MediaHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		MediaType  models.MediaType   `json:"media_type"  validate:"required,oneof=film tv_show book anime"`
-		ExternalID *string            `json:"external_id"`
-		Title      string             `json:"title"       validate:"required,max=500"`
-		Year       *int               `json:"year"`
-		PosterURL  *string            `json:"poster_url"`
-		Metadata   map[string]any     `json:"metadata"`
-		Status     models.MediaStatus `json:"status"      validate:"omitempty,oneof=want_to in_progress completed dropped on_hold"`
+		MediaType       models.MediaType   `json:"media_type"  validate:"required,oneof=film tv_show book anime"`
+		ExternalID      *string            `json:"external_id"`
+		Title           string             `json:"title"       validate:"required,max=500"`
+		Year            *int               `json:"year"`
+		PosterURL       *string            `json:"poster_url"`
+		Metadata        map[string]any     `json:"metadata"`
+		Status          models.MediaStatus `json:"status"      validate:"omitempty,oneof=want_to in_progress completed dropped on_hold"`
+		TotalProgress   *int               `json:"total_progress"`
+		CurrentProgress *int               `json:"current_progress"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
@@ -89,15 +116,24 @@ func (h *MediaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		body.Status = models.StatusWantTo
 	}
 
+	// Auto-fill total episodes from TMDB for TV shows
+	if body.MediaType == models.MediaTypeTVShow && body.TotalProgress == nil && body.ExternalID != nil {
+		if tmdbID := strings.TrimPrefix(*body.ExternalID, "tmdb:"); tmdbID != *body.ExternalID {
+			body.TotalProgress = h.fetchTMDBEpisodes(r.Context(), tmdbID)
+		}
+	}
+
 	item, err := h.media.Create(r.Context(), repository.CreateMediaInput{
-		UserID:     userIDFrom(r),
-		MediaType:  body.MediaType,
-		ExternalID: body.ExternalID,
-		Title:      body.Title,
-		Year:       body.Year,
-		PosterURL:  body.PosterURL,
-		Metadata:   body.Metadata,
-		Status:     body.Status,
+		UserID:          userIDFrom(r),
+		MediaType:       body.MediaType,
+		ExternalID:      body.ExternalID,
+		Title:           body.Title,
+		Year:            body.Year,
+		PosterURL:       body.PosterURL,
+		Metadata:        body.Metadata,
+		Status:          body.Status,
+		TotalProgress:   body.TotalProgress,
+		CurrentProgress: body.CurrentProgress,
 	})
 	if err != nil {
 		jsonErr(w, http.StatusConflict, "item already in library")
@@ -119,6 +155,42 @@ func (h *MediaHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, item)
+}
+
+// POST /media/{id}/refresh
+func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	item, err := h.media.GetByID(r.Context(), id, userIDFrom(r))
+	if err != nil || item == nil {
+		jsonErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if item.MediaType != models.MediaTypeTVShow || item.ExternalID == nil {
+		jsonErr(w, http.StatusBadRequest, "only tv shows with a TMDB id can be refreshed")
+		return
+	}
+	tmdbID := strings.TrimPrefix(*item.ExternalID, "tmdb:")
+	if tmdbID == *item.ExternalID {
+		jsonErr(w, http.StatusBadRequest, "not a TMDB item")
+		return
+	}
+	total := h.fetchTMDBEpisodes(r.Context(), tmdbID)
+	if total == nil {
+		jsonErr(w, http.StatusServiceUnavailable, "could not fetch from TMDB")
+		return
+	}
+	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
+		TotalProgress: total,
+	})
+	if err != nil || updated == nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, updated)
 }
 
 // PATCH /media/{id}
