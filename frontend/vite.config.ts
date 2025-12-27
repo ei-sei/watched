@@ -25,8 +25,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,
-            handler: 'NetworkFirst',
-            options: { cacheName: 'tmdb-images', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+            handler: 'NetworkOnly',
           },
           {
             urlPattern: /^https:\/\/covers\.openlibrary\.org\/.*/i,
