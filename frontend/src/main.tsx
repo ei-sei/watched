@@ -3,9 +3,12 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 
-// Auto-reload when a new service worker takes control
+// Auto-reload once when a new service worker takes control
 if ('serviceWorker' in navigator) {
+  let reloading = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return
+    reloading = true
     window.location.reload()
   })
 }
