@@ -47,9 +47,9 @@ func (r *EpisodeRepo) List(ctx context.Context, mediaItemID int) ([]models.TvEpi
 func (r *EpisodeRepo) Upsert(ctx context.Context, mediaItemID, season, episode int, watchedAt *string, rating *float64, note *string) (*models.TvEpisodeLog, error) {
 	return scanEpisode(r.db.QueryRow(ctx,
 		`INSERT INTO tv_episode_logs (media_item_id, season_number, episode_number, watched_at, rating, note)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+		 VALUES ($1, $2, $3, COALESCE($4, NOW()), $5, $6)
 		 ON CONFLICT (media_item_id, season_number, episode_number) DO UPDATE SET
-		     watched_at = EXCLUDED.watched_at,
+		     watched_at = COALESCE(EXCLUDED.watched_at, NOW()),
 		     rating     = EXCLUDED.rating,
 		     note       = EXCLUDED.note
 		 RETURNING `+episodeColumns,
