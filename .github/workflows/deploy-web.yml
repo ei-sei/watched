@@ -10,7 +10,7 @@ env:
   IMAGE_WEB: ghcr.io/${{ github.repository_owner }}/watched-web
 
 jobs:
-  lint-and-test:
+  test-backend:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -26,69 +26,73 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
           cache-dependency-path: backend/go.sum
-
-      - name: Vet backend
-        run: |
-          cd backend
-          go vet ./...
-
-      - name: Test backend
+      - name: Vet & test backend
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/watched_test?sslmode=disable
           JWT_SECRET_KEY: test-secret-not-for-production
         run: |
           cd backend
+          go vet ./...
           go test ./...
 
+  lint-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
       - name: Lint frontend
         run: |
           cd frontend
           npm ci
           npm run lint
 
-  build-and-push:
-    needs: lint-and-test
+  build-api:
+    needs: test-backend
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+      - uses: docker/setup-buildx-action@v3
       - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: true
           tags: ${{ env.IMAGE_API }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
 
+  build-web:
+    needs: lint-frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
       - name: Build and push Web image
         uses: docker/build-push-action@v6
         with:
@@ -97,11 +101,11 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_WEB }}:latest
           build-args: VITE_API_URL=/api
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
 
   deploy:
-    needs: build-and-push
+    needs: [build-api, build-web]
     runs-on: ubuntu-latest
     steps:
       - uses: appleboy/ssh-action@v1
