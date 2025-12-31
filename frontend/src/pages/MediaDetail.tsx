@@ -7,13 +7,12 @@ import AnimeSeasonManager from '@/components/tracking/AnimeSeasonManager'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
 import ProgressTracker from '@/components/tracking/ProgressTracker'
 import TVSeasonProgress from '@/components/tracking/TVSeasonProgress'
-import StatusBadge from '@/components/ui/StatusBadge'
-import RatingDisplay from '@/components/ui/RatingDisplay'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
 import { mediaApi } from '@/api/media'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Trash2 } from 'lucide-react'
+import { STATUS_LABELS, STATUS_COLOURS } from '@/utils/constants'
 import type { MediaStatus } from '@/types/media'
 
 const REFRESH_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour
@@ -28,6 +27,7 @@ function setLastRefresh(itemId: number) {
 const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'dropped', 'on_hold']
 
 export default function MediaDetail() {
+
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: item, isLoading } = useMediaItem(Number(id))
@@ -78,45 +78,84 @@ export default function MediaDetail() {
     <div className="max-w-3xl mx-auto space-y-8">
       <div className="flex gap-6">
         {item.poster_url && (
-          <img src={item.poster_url} alt={item.title} className="w-32 sm:w-48 rounded-lg object-cover flex-shrink-0" />
+          <img src={item.poster_url} alt={item.title} className="w-32 sm:w-48 rounded-lg object-cover flex-shrink-0 shadow-lg" />
         )}
-        <div className="space-y-3 flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-white">{item.title}</h1>
-          {item.year && <p className="text-slate-400">{item.year}</p>}
-          <div className="flex items-center gap-3 flex-wrap">
-            <StatusBadge status={item.status} />
-            <RatingDisplay rating={item.rating} />
-          </div>
-          <p className="text-xs text-slate-500">Added {formatDate(item.created_at)}</p>
-
-          <div className="space-y-2 pt-2">
-            <div className="flex gap-2 items-center">
-              <label className="text-sm text-slate-400 w-16">Status</label>
-              <select value={item.status}
-                onChange={(e) => update.mutate({ id: item.id, data: { status: e.target.value as MediaStatus } })}
-                className="bg-slate-800 text-white rounded px-2 py-1 text-sm">
-                {STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-              </select>
+        <div className="flex-1 min-w-0 space-y-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h1 className="text-2xl font-bold text-white leading-tight">{item.title}</h1>
+              <p className="text-sm text-zinc-500 mt-1">
+                {item.year && <span>{item.year} · </span>}
+                Added {formatDate(item.created_at)}
+              </p>
             </div>
-            <div className="flex gap-2 items-center">
-              <label className="text-sm text-slate-400 w-16">Rating</label>
-              <input type="number" min={1} max={10} step={0.5} value={item.rating ?? ''}
-                onChange={(e) => update.mutate({ id: item.id, data: { rating: e.target.value ? +e.target.value : null } })}
-                className="w-20 bg-slate-800 text-white rounded px-2 py-1 text-sm" placeholder="1–10" />
-            </div>
+            <button
+              onClick={handleDelete}
+              className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
+              title="Remove from library"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
 
-          <div className="pt-2">
-            <label className="block text-sm text-slate-400 mb-1">Review</label>
-            <textarea defaultValue={item.review_text ?? ''}
+          {/* Status pills */}
+          <div className="flex flex-wrap gap-1.5">
+            {STATUSES.map((s) => {
+              const active = item.status === s
+              const colours = STATUS_COLOURS[s] ?? 'bg-zinc-700 text-zinc-300'
+              return (
+                <button
+                  key={s}
+                  onClick={() => update.mutate({ id: item.id, data: { status: s } })}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    active
+                      ? colours
+                      : 'bg-transparent text-zinc-600 hover:text-zinc-400 border border-white/[0.06] hover:border-white/[0.12]'
+                  }`}
+                >
+                  {STATUS_LABELS[s]}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Rating row */}
+          <div className="space-y-1.5">
+            <p className="text-xs text-zinc-600 uppercase tracking-wider">Rating</p>
+            <div className="flex gap-1">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
+                const active = item.rating !== null && item.rating !== undefined && n <= item.rating
+                const isSelected = item.rating === n
+                return (
+                  <button
+                    key={n}
+                    onClick={() => update.mutate({ id: item.id, data: { rating: isSelected ? null : n } })}
+                    className={`w-7 h-7 rounded text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-indigo-500 text-white scale-110'
+                        : active
+                        ? 'bg-indigo-500/30 text-indigo-300'
+                        : 'bg-white/[0.04] text-zinc-600 hover:bg-white/[0.08] hover:text-zinc-400'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Review */}
+          <div className="space-y-1.5">
+            <p className="text-xs text-zinc-600 uppercase tracking-wider">Review</p>
+            <textarea
+              defaultValue={item.review_text ?? ''}
               onBlur={(e) => update.mutate({ id: item.id, data: { review_text: e.target.value || null } })}
-              rows={4} placeholder="Your thoughts…"
-              className="w-full bg-slate-800 text-white rounded px-3 py-2 text-sm resize-none border border-slate-700 focus:outline-none focus:border-indigo-500" />
+              rows={3}
+              placeholder="Your thoughts…"
+              className="w-full bg-white/[0.03] text-zinc-300 placeholder-zinc-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
+            />
           </div>
-
-          <button onClick={handleDelete} className="text-sm text-red-400 hover:text-red-300 transition-colors">
-            Remove from library
-          </button>
         </div>
       </div>
 
