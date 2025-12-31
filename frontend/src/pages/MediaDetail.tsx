@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMediaItem, useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
 import EpisodeTracker from '@/components/tracking/EpisodeTracker'
+import AnimeSeasonManager from '@/components/tracking/AnimeSeasonManager'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
 import ProgressTracker from '@/components/tracking/ProgressTracker'
 import TVSeasonProgress from '@/components/tracking/TVSeasonProgress'
@@ -150,6 +151,7 @@ export default function MediaDetail() {
         </div>
       )}
       {(item.media_type === 'tv_show' || item.media_type === 'anime') && <EpisodeTracker item={item} />}
+      {item.media_type === 'anime' && <AnimeSeasonManager item={item} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
     </div>
   )

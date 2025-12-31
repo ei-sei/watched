@@ -277,6 +277,158 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, updated)
 }
 
+// POST /media/{id}/seasons — add a new season to an anime entry from a MAL ID
+func (h *MediaHandler) AddAnimeSeason(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var body struct {
+		MalID int `json:"mal_id" validate:"required,min=1"`
+	}
+	if err := decode(r, &body); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if err := h.validate.Struct(body); err != nil {
+		jsonErr(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	item, err := h.media.GetByID(r.Context(), id, userIDFrom(r))
+	if err != nil || item == nil {
+		jsonErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if item.MediaType != models.MediaTypeAnime {
+		jsonErr(w, http.StatusBadRequest, "only anime entries support season linking")
+		return
+	}
+	malID := fmt.Sprintf("%d", body.MalID)
+	data := h.fetchJikanData(r.Context(), malID)
+	if data == nil || data.TotalEpisodes == nil {
+		jsonErr(w, http.StatusServiceUnavailable, "could not fetch episode data from MAL")
+		return
+	}
+	meta := item.Metadata
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	// Determine next season number
+	existing := []map[string]any{}
+	if raw, ok := meta["seasons"]; ok {
+		if slice, ok := raw.([]any); ok {
+			for _, s := range slice {
+				if m, ok := s.(map[string]any); ok {
+					existing = append(existing, m)
+				}
+			}
+		} else if ms, ok := raw.([]map[string]any); ok {
+			existing = ms
+		}
+	}
+	nextSeason := len(existing) + 1
+	existing = append(existing, map[string]any{
+		"season_number": nextSeason,
+		"episode_count": *data.TotalEpisodes,
+		"mal_id":        body.MalID,
+	})
+	meta["seasons"] = existing
+	// Recalculate total episodes
+	total := 0
+	for _, s := range existing {
+		if ec, ok := s["episode_count"].(int); ok {
+			total += ec
+		} else if ec, ok := s["episode_count"].(float64); ok {
+			total += int(ec)
+		}
+	}
+	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
+		TotalProgress: &total,
+		Metadata:      meta,
+	})
+	if err != nil || updated == nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, updated)
+}
+
+// DELETE /media/{id}/seasons/{seasonNum} — remove a season from an anime entry
+func (h *MediaHandler) RemoveAnimeSeason(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	seasonNum, err := strconv.Atoi(chi.URLParam(r, "seasonNum"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid season number")
+		return
+	}
+	item, err := h.media.GetByID(r.Context(), id, userIDFrom(r))
+	if err != nil || item == nil {
+		jsonErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	meta := item.Metadata
+	if meta == nil {
+		jsonErr(w, http.StatusBadRequest, "no seasons to remove")
+		return
+	}
+	raw, ok := meta["seasons"]
+	if !ok {
+		jsonErr(w, http.StatusBadRequest, "no seasons to remove")
+		return
+	}
+	var seasons []map[string]any
+	if slice, ok := raw.([]any); ok {
+		for _, s := range slice {
+			if m, ok := s.(map[string]any); ok {
+				seasons = append(seasons, m)
+			}
+		}
+	} else if ms, ok := raw.([]map[string]any); ok {
+		seasons = ms
+	}
+	// Filter out the target season and renumber
+	filtered := []map[string]any{}
+	for _, s := range seasons {
+		var sn int
+		switch v := s["season_number"].(type) {
+		case float64:
+			sn = int(v)
+		case int:
+			sn = v
+		}
+		if sn != seasonNum {
+			filtered = append(filtered, s)
+		}
+	}
+	// Renumber remaining seasons
+	for i := range filtered {
+		filtered[i]["season_number"] = i + 1
+	}
+	meta["seasons"] = filtered
+	total := 0
+	for _, s := range filtered {
+		if ec, ok := s["episode_count"].(int); ok {
+			total += ec
+		} else if ec, ok := s["episode_count"].(float64); ok {
+			total += int(ec)
+		}
+	}
+	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
+		TotalProgress: &total,
+		Metadata:      meta,
+	})
+	if err != nil || updated == nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, updated)
+}
+
 // PATCH /media/{id}
 func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))

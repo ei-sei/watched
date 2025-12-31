@@ -10,4 +10,6 @@ export const mediaApi = {
   update: (id: number, data: Partial<MediaItem>) => client.patch<MediaItem>(`/media/${id}`, data),
   delete: (id: number) => client.delete(`/media/${id}`),
   refreshFromTMDB: (id: number) => client.post<MediaItem>(`/media/${id}/refresh`),
+  addSeason: (id: number, malId: number) => client.post<MediaItem>(`/media/${id}/seasons`, { mal_id: malId }),
+  removeSeason: (id: number, seasonNum: number) => client.delete<MediaItem>(`/media/${id}/seasons/${seasonNum}`),
 }
