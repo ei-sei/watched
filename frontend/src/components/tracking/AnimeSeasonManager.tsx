@@ -23,6 +23,23 @@ export default function AnimeSeasonManager({ item }: Props) {
   const [results, setResults] = useState<JikanResult[]>([])
   const [searching, setSearching] = useState(false)
 
+  const openAndSearch = async () => {
+    setOpen(true)
+    setQuery(item.title)
+    setSearching(true)
+    try {
+      const res = await fetch(
+        `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(item.title)}&limit=10&sfw=false`
+      )
+      const json = await res.json()
+      setResults(json.data ?? [])
+    } catch {
+      show('Search failed', 'error')
+    } finally {
+      setSearching(false)
+    }
+  }
+
   const seasons = (item.metadata?.seasons as { season_number: number; episode_count: number; mal_id?: number }[] | undefined) ?? []
 
   const addSeason = useMutation({
@@ -64,7 +81,7 @@ export default function AnimeSeasonManager({ item }: Props) {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Seasons</h3>
         <button
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => open ? setOpen(false) : openAndSearch()}
           className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
         >
           <Plus size={12} /> Add season
