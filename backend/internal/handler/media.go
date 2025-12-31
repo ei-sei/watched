@@ -39,6 +39,31 @@ type tmdbTVData struct {
 	Seasons       []map[string]any
 }
 
+func (h *MediaHandler) fetchJikanData(ctx context.Context, malID string) *tmdbTVData {
+	u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s", malID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		Data struct {
+			Episodes *int `json:"episodes"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || raw.Data.Episodes == nil || *raw.Data.Episodes == 0 {
+		return nil
+	}
+	seasons := []map[string]any{
+		{"season_number": 1, "episode_count": *raw.Data.Episodes},
+	}
+	return &tmdbTVData{TotalEpisodes: raw.Data.Episodes, Seasons: seasons}
+}
+
 func (h *MediaHandler) fetchTMDBData(ctx context.Context, tmdbID string) *tmdbTVData {
 	if h.tmdbKey == "" {
 		return nil
@@ -135,19 +160,27 @@ func (h *MediaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		body.Status = models.StatusWantTo
 	}
 
-	// Auto-fill total episodes and season breakdown from TMDB for TV shows
-	if body.MediaType == models.MediaTypeTVShow && body.ExternalID != nil {
-		if tmdbID := strings.TrimPrefix(*body.ExternalID, "tmdb:"); tmdbID != *body.ExternalID {
-			if tvData := h.fetchTMDBData(r.Context(), tmdbID); tvData != nil {
-				if body.TotalProgress == nil {
-					body.TotalProgress = tvData.TotalEpisodes
+	// Auto-fill total episodes and season breakdown from TMDB (TV) or Jikan (anime)
+	if body.ExternalID != nil {
+		var externalData *tmdbTVData
+		if body.MediaType == models.MediaTypeTVShow {
+			if tmdbID := strings.TrimPrefix(*body.ExternalID, "tmdb:"); tmdbID != *body.ExternalID {
+				externalData = h.fetchTMDBData(r.Context(), tmdbID)
+			}
+		} else if body.MediaType == models.MediaTypeAnime {
+			if malID := strings.TrimPrefix(*body.ExternalID, "mal:"); malID != *body.ExternalID {
+				externalData = h.fetchJikanData(r.Context(), malID)
+			}
+		}
+		if externalData != nil {
+			if body.TotalProgress == nil {
+				body.TotalProgress = externalData.TotalEpisodes
+			}
+			if len(externalData.Seasons) > 0 {
+				if body.Metadata == nil {
+					body.Metadata = map[string]any{}
 				}
-				if len(tvData.Seasons) > 0 {
-					if body.Metadata == nil {
-						body.Metadata = map[string]any{}
-					}
-					body.Metadata["seasons"] = tvData.Seasons
-				}
+				body.Metadata["seasons"] = externalData.Seasons
 			}
 		}
 	}
@@ -198,18 +231,31 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	if item.MediaType != models.MediaTypeTVShow || item.ExternalID == nil {
-		jsonErr(w, http.StatusBadRequest, "only tv shows with a TMDB id can be refreshed")
+	if item.ExternalID == nil {
+		jsonErr(w, http.StatusBadRequest, "item has no external id")
 		return
 	}
-	tmdbID := strings.TrimPrefix(*item.ExternalID, "tmdb:")
-	if tmdbID == *item.ExternalID {
-		jsonErr(w, http.StatusBadRequest, "not a TMDB item")
+	var tvData *tmdbTVData
+	if item.MediaType == models.MediaTypeTVShow {
+		tmdbID := strings.TrimPrefix(*item.ExternalID, "tmdb:")
+		if tmdbID == *item.ExternalID {
+			jsonErr(w, http.StatusBadRequest, "not a TMDB item")
+			return
+		}
+		tvData = h.fetchTMDBData(r.Context(), tmdbID)
+	} else if item.MediaType == models.MediaTypeAnime {
+		malID := strings.TrimPrefix(*item.ExternalID, "mal:")
+		if malID == *item.ExternalID {
+			jsonErr(w, http.StatusBadRequest, "not a MAL item")
+			return
+		}
+		tvData = h.fetchJikanData(r.Context(), malID)
+	} else {
+		jsonErr(w, http.StatusBadRequest, "only tv shows and anime can be refreshed")
 		return
 	}
-	tvData := h.fetchTMDBData(r.Context(), tmdbID)
 	if tvData == nil || tvData.TotalEpisodes == nil {
-		jsonErr(w, http.StatusServiceUnavailable, "could not fetch from TMDB")
+		jsonErr(w, http.StatusServiceUnavailable, "could not fetch episode data")
 		return
 	}
 	// Merge seasons into existing metadata
