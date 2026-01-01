@@ -64,6 +64,15 @@ export default function Admin() {
   const invites = useQuery({ queryKey: ['admin', 'invites'], queryFn: () => adminApi.listInvites().then(r => r.data) })
   const users   = useQuery({ queryKey: ['admin', 'users'],   queryFn: () => adminApi.listUsers().then(r => r.data), enabled: tab === 'users' })
 
+  const deleteInvite = useMutation({
+    mutationFn: (code: string) => adminApi.deleteInvite(code),
+    onSuccess: () => {
+      show('Invite code revoked', 'success')
+      qc.invalidateQueries({ queryKey: ['admin', 'invites'] })
+    },
+    onError: () => show('Failed to revoke invite code', 'error'),
+  })
+
   const createInvite = useMutation({
     mutationFn: () => adminApi.createInvite(newCode),
     onSuccess: () => {
@@ -160,6 +169,14 @@ export default function Admin() {
                         title="Copy invite link"
                       >
                         <Copy size={13} />
+                      </button>
+                      <button
+                        onClick={() => deleteInvite.mutate(inv.code)}
+                        disabled={deleteInvite.isPending}
+                        className="p-1 text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-30"
+                        title="Revoke invite code"
+                      >
+                        <Trash2 size={13} />
                       </button>
                     </>
                   )}

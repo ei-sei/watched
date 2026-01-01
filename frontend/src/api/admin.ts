@@ -23,4 +23,5 @@ export const adminApi = {
   deleteUser: (id: number) => client.delete(`/admin/users/${id}`),
   listInvites: () => client.get<InviteCode[]>('/admin/invites'),
   createInvite: (code: string) => client.post<{ code: string }>('/admin/invites', { code }),
+  deleteInvite: (code: string) => client.delete(`/admin/invites/${code}`),
 }
