@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi } from '@/api/admin'
+import { adminApi, type AdminStats } from '@/api/admin'
 import { useToast } from '@/components/ui/Toast'
 import { Copy, RefreshCw, Trash2 } from 'lucide-react'
 
@@ -54,6 +54,34 @@ function ConfirmDeleteModal({ username, onConfirm, onCancel }: {
   )
 }
 
+function StatsCard({ s }: { s: AdminStats }) {
+  const items = [
+    { label: 'Users',        value: s.total_users },
+    { label: 'Library items', value: s.total_items },
+    { label: 'Episodes logged', value: s.total_episodes },
+    { label: 'Chapters logged', value: s.total_chapters },
+    { label: 'Unused invites',  value: s.unused_invites },
+  ]
+  return (
+    <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Overview</p>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.db_healthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+          DB {s.db_healthy ? 'healthy' : 'error'}
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+        {items.map(({ label, value }) => (
+          <div key={label} className="space-y-0.5">
+            <p className="text-xl font-semibold text-white tabular-nums">{value}</p>
+            <p className="text-xs text-zinc-600">{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('invites')
   const [newCode, setNewCode] = useState(randomCode)
@@ -61,6 +89,7 @@ export default function Admin() {
   const { show } = useToast()
   const qc = useQueryClient()
 
+  const stats   = useQuery({ queryKey: ['admin', 'stats'],   queryFn: () => adminApi.getStats().then(r => r.data) })
   const invites = useQuery({ queryKey: ['admin', 'invites'], queryFn: () => adminApi.listInvites().then(r => r.data) })
   const users   = useQuery({ queryKey: ['admin', 'users'],   queryFn: () => adminApi.listUsers().then(r => r.data), enabled: tab === 'users' })
 
@@ -113,6 +142,8 @@ export default function Admin() {
   return (
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-semibold text-white tracking-tight">Admin</h1>
+
+      {stats.data && <StatsCard s={stats.data} />}
 
       <div className="flex gap-1.5">
         <button className={tabClass('invites')} onClick={() => setTab('invites')}>Invite Codes</button>
