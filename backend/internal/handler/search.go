@@ -67,9 +67,11 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	var all []models.SearchResult
 	for res := range results {
-		if res.err == nil {
-			all = append(all, res.items...)
+		if res.err != nil {
+			fmt.Printf("[search] error: %v\n", res.err)
+			continue
 		}
+		all = append(all, res.items...)
 	}
 	if all == nil {
 		all = []models.SearchResult{}
@@ -211,6 +213,9 @@ func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]mode
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google books: status %d", resp.StatusCode)
+	}
 
 	var raw struct {
 		Items []struct {
