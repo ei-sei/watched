@@ -24,9 +24,9 @@ export default function Search() {
 
   const handleAdd = async (result: ApiSearchResult) => {
     try {
-      const totalProgress = typeof result.extra?.episodes === 'number' && result.extra.episodes > 0
-        ? result.extra.episodes
-        : undefined
+      const totalProgress =
+        (typeof result.extra?.episodes === 'number' && result.extra.episodes > 0 ? result.extra.episodes : undefined) ??
+        (typeof result.extra?.page_count === 'number' && result.extra.page_count > 0 ? result.extra.page_count : undefined)
 
       await create.mutateAsync({
         media_type: result.media_type as MediaType,

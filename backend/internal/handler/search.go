@@ -151,7 +151,7 @@ func (h *SearchHandler) searchTMDB(ctx context.Context, q string) ([]models.Sear
 }
 
 func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]models.SearchResult, error) {
-	u := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&limit=10&fields=key,title,author_name,first_publish_year,cover_i",
+	u := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&limit=10&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median",
 		url.QueryEscape(q))
 
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -163,11 +163,12 @@ func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]mode
 
 	var raw struct {
 		Docs []struct {
-			Key              string   `json:"key"`
-			Title            string   `json:"title"`
-			AuthorName       []string `json:"author_name"`
-			FirstPublishYear *int     `json:"first_publish_year"`
-			CoverI           *int     `json:"cover_i"`
+			Key                  string   `json:"key"`
+			Title                string   `json:"title"`
+			AuthorName           []string `json:"author_name"`
+			FirstPublishYear     *int     `json:"first_publish_year"`
+			CoverI               *int     `json:"cover_i"`
+			NumberOfPagesMedian  *int     `json:"number_of_pages_median"`
 		} `json:"docs"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
@@ -182,6 +183,9 @@ func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]mode
 			poster = &s
 		}
 		extra := map[string]any{"authors": d.AuthorName}
+		if d.NumberOfPagesMedian != nil && *d.NumberOfPagesMedian > 0 {
+			extra["page_count"] = *d.NumberOfPagesMedian
+		}
 		out = append(out, models.SearchResult{
 			Source:     "openlibrary",
 			MediaType:  string(models.MediaTypeBook),
@@ -216,6 +220,7 @@ func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]mode
 				Authors             []string `json:"authors"`
 				PublishedDate       string   `json:"publishedDate"`
 				Description         string   `json:"description"`
+				PageCount           *int     `json:"pageCount"`
 				ImageLinks          *struct {
 					Thumbnail string `json:"thumbnail"`
 				} `json:"imageLinks"`
@@ -242,6 +247,9 @@ func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]mode
 		}
 		desc := vi.Description
 		extra := map[string]any{"authors": vi.Authors}
+		if vi.PageCount != nil && *vi.PageCount > 0 {
+			extra["page_count"] = *vi.PageCount
+		}
 		out = append(out, models.SearchResult{
 			Source:      "googlebooks",
 			MediaType:   string(models.MediaTypeBook),
