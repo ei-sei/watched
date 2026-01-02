@@ -49,8 +49,8 @@ export default function EpisodeTracker({ item }: Props) {
             : null
 
           return (
-            <div key={s.season_number} className="flex items-center gap-3 py-1">
-              <span className="text-sm text-zinc-400 w-20 flex-shrink-0">Season {s.season_number}</span>
+            <div key={s.season_number} className="flex items-center gap-2 sm:gap-3 py-1">
+              <span className="text-sm text-zinc-400 w-16 sm:w-20 flex-shrink-0">S{s.season_number < 10 ? '0' + s.season_number : s.season_number}</span>
               <div className="flex items-center gap-2 bg-[#1a1a1a] rounded-md border border-white/[0.08] px-1">
                 <button
                   onClick={() => watched[0] && remove.mutate(watched[0].id)}

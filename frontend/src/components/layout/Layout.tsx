@@ -22,7 +22,7 @@ export default function Layout() {
       <BottomNav />
 
       {/* Version badge */}
-      <span className="fixed bottom-2 right-2 text-[10px] text-zinc-700 select-none pointer-events-none">
+      <span className="fixed bottom-[4.5rem] md:bottom-2 right-2 text-[10px] text-zinc-700 select-none pointer-events-none">
         v{VERSION}
       </span>
     </div>
