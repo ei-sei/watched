@@ -18,6 +18,7 @@ export default function Stats() {
 
   const totalItems = s.films.total + s.tv_shows.total + s.books.total + s.anime.total
   const maxRatingCount = Math.max(...s.rating_distribution.map(b => b.count), 1)
+  const maxMonthCount = Math.max(...s.monthly_activity.map(m => m.count), 1)
 
   const typeCards = [
     { label: 'Movies',   total: s.films.total,    detail: `${s.films.this_month} this month`,          sub: s.films.avg_rating ? `Avg ${s.films.avg_rating.toFixed(1)} / 10` : null, colour: 'text-blue-400' },
@@ -97,6 +98,34 @@ export default function Stats() {
                     />
                   </div>
                   <span className="text-[9px] text-zinc-600">{r}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Monthly activity */}
+      {s.monthly_activity.length > 0 && (
+        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
+          <div className="flex items-end gap-1 h-20">
+            {s.monthly_activity.map(({ month, count }) => {
+              const height = count > 0 ? Math.max((count / maxMonthCount) * 100, 8) : 0
+              const [y, m] = month.split('-')
+              const label = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short' })
+              return (
+                <div key={month} className="flex-1 flex flex-col items-center gap-1">
+                  {count > 0 && (
+                    <span className="text-[9px] text-zinc-600 tabular-nums">{count}</span>
+                  )}
+                  <div className="w-full flex items-end" style={{ height: '64px' }}>
+                    <div
+                      className="w-full rounded-sm bg-indigo-500/40 transition-all"
+                      style={{ height: `${height}%` }}
+                    />
+                  </div>
+                  <span className="text-[9px] text-zinc-600">{label}</span>
                 </div>
               )
             })}
