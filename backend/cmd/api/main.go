@@ -133,6 +133,7 @@ func main() {
 		// Search & Stats
 		r.Get("/search", searchH.Search)
 		r.Get("/stats", statsH.Get)
+		r.Get("/stats/summary", statsH.Summary)
 
 		// Import
 		r.Post("/import/mal/file", importH.ImportXML)

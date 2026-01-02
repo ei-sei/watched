@@ -291,3 +291,101 @@ func (r *MediaRepo) AverageRating(ctx context.Context, userID int, mt models.Med
 	).Scan(&avg)
 	return avg, err
 }
+
+type StatsSummary struct {
+	Films   FilmStats   `json:"films"`
+	TVShows TVStats     `json:"tv_shows"`
+	Books   BookStats   `json:"books"`
+	Anime   AnimeStats  `json:"anime"`
+}
+
+type FilmStats struct {
+	Total      int      `json:"total"`
+	ThisMonth  int      `json:"this_month"`
+	AvgRating  *float64 `json:"avg_rating"`
+}
+
+type TVStats struct {
+	Total             int `json:"total"`
+	InProgress        int `json:"in_progress"`
+	EpisodesThisMonth int `json:"episodes_this_month"`
+}
+
+type BookStats struct {
+	Total             int `json:"total"`
+	InProgress        int `json:"in_progress"`
+	ChaptersThisMonth int `json:"chapters_this_month"`
+}
+
+type AnimeStats struct {
+	Total             int `json:"total"`
+	InProgress        int `json:"in_progress"`
+	EpisodesThisMonth int `json:"episodes_this_month"`
+}
+
+func (r *MediaRepo) GetSummary(ctx context.Context, userID int) (*StatsSummary, error) {
+	s := &StatsSummary{}
+
+	// Films
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE completed_at >= date_trunc('month', now())),
+			AVG(rating) FILTER (WHERE rating IS NOT NULL)
+		FROM media_items
+		WHERE user_id = $1 AND media_type = 'film'
+	`, userID).Scan(&s.Films.Total, &s.Films.ThisMonth, &s.Films.AvgRating)
+	if err != nil {
+		return nil, err
+	}
+
+	// TV
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status = 'in_progress'),
+			(SELECT COUNT(*) FROM tv_episode_logs e
+			 JOIN media_items m ON m.id = e.media_item_id
+			 WHERE m.user_id = $1 AND m.media_type = 'tv_show'
+			 AND e.watched_at >= date_trunc('month', now()))
+		FROM media_items
+		WHERE user_id = $1 AND media_type = 'tv_show'
+	`, userID).Scan(&s.TVShows.Total, &s.TVShows.InProgress, &s.TVShows.EpisodesThisMonth)
+	if err != nil {
+		return nil, err
+	}
+
+	// Books
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status = 'in_progress'),
+			(SELECT COUNT(*) FROM book_chapter_logs c
+			 JOIN media_items m ON m.id = c.media_item_id
+			 WHERE m.user_id = $1
+			 AND c.completed_at >= date_trunc('month', now()))
+		FROM media_items
+		WHERE user_id = $1 AND media_type = 'book'
+	`, userID).Scan(&s.Books.Total, &s.Books.InProgress, &s.Books.ChaptersThisMonth)
+	if err != nil {
+		return nil, err
+	}
+
+	// Anime
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*),
+			COUNT(*) FILTER (WHERE status = 'in_progress'),
+			(SELECT COUNT(*) FROM tv_episode_logs e
+			 JOIN media_items m ON m.id = e.media_item_id
+			 WHERE m.user_id = $1 AND m.media_type = 'anime'
+			 AND e.watched_at >= date_trunc('month', now()))
+		FROM media_items
+		WHERE user_id = $1 AND media_type = 'anime'
+	`, userID).Scan(&s.Anime.Total, &s.Anime.InProgress, &s.Anime.EpisodesThisMonth)
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
