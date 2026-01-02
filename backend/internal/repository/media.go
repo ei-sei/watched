@@ -292,11 +292,21 @@ func (r *MediaRepo) AverageRating(ctx context.Context, userID int, mt models.Med
 	return avg, err
 }
 
+type RatingBucket struct {
+	Rating int `json:"rating"`
+	Count  int `json:"count"`
+}
+
 type StatsSummary struct {
-	Films   FilmStats   `json:"films"`
-	TVShows TVStats     `json:"tv_shows"`
-	Books   BookStats   `json:"books"`
-	Anime   AnimeStats  `json:"anime"`
+	Films              FilmStats      `json:"films"`
+	TVShows            TVStats        `json:"tv_shows"`
+	Books              BookStats      `json:"books"`
+	Anime              AnimeStats     `json:"anime"`
+	RatingDistribution []RatingBucket `json:"rating_distribution"`
+	LongestStreakDays  int            `json:"longest_streak_days"`
+	CurrentStreakDays  int            `json:"current_streak_days"`
+	EstimatedMinutes   int            `json:"estimated_minutes"`
+	CompletionRate     float64        `json:"completion_rate"`
 }
 
 type FilmStats struct {
@@ -383,6 +393,93 @@ func (r *MediaRepo) GetSummary(ctx context.Context, userID int) (*StatsSummary, 
 		FROM media_items
 		WHERE user_id = $1 AND media_type = 'anime'
 	`, userID).Scan(&s.Anime.Total, &s.Anime.InProgress, &s.Anime.EpisodesThisMonth)
+	if err != nil {
+		return nil, err
+	}
+
+	// Completion rate (completed / all started, i.e. not want_to)
+	var completed, started int
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'completed'),
+			COUNT(*) FILTER (WHERE status != 'want_to')
+		FROM media_items WHERE user_id = $1
+	`, userID).Scan(&completed, &started)
+	if err != nil {
+		return nil, err
+	}
+	if started > 0 {
+		s.CompletionRate = float64(completed) / float64(started)
+	}
+
+	// Estimated time (minutes): films×110 + tv eps×42 + anime eps×24
+	err = r.db.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'film' AND status = 'completed') * 110 +
+			(SELECT COUNT(*) FROM tv_episode_logs e JOIN media_items m ON m.id = e.media_item_id WHERE m.user_id = $1 AND m.media_type = 'tv_show') * 42 +
+			(SELECT COUNT(*) FROM tv_episode_logs e JOIN media_items m ON m.id = e.media_item_id WHERE m.user_id = $1 AND m.media_type = 'anime') * 24
+	`, userID).Scan(&s.EstimatedMinutes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Rating distribution
+	rows, err := r.db.Query(ctx, `
+		SELECT ROUND(rating)::int, COUNT(*)
+		FROM media_items
+		WHERE user_id = $1 AND rating IS NOT NULL
+		GROUP BY ROUND(rating)::int
+		ORDER BY ROUND(rating)::int
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b RatingBucket
+		if err := rows.Scan(&b.Rating, &b.Count); err != nil {
+			return nil, err
+		}
+		s.RatingDistribution = append(s.RatingDistribution, b)
+	}
+	if s.RatingDistribution == nil {
+		s.RatingDistribution = []RatingBucket{}
+	}
+
+	// Streaks — activity = any episode logged or item completed
+	err = r.db.QueryRow(ctx, `
+		WITH activity_dates AS (
+			SELECT DISTINCT DATE(e.watched_at) AS d
+			FROM tv_episode_logs e
+			JOIN media_items m ON m.id = e.media_item_id
+			WHERE m.user_id = $1 AND e.watched_at IS NOT NULL
+			UNION
+			SELECT DISTINCT DATE(c.completed_at)
+			FROM book_chapter_logs c
+			JOIN media_items m ON m.id = c.media_item_id
+			WHERE m.user_id = $1 AND c.completed_at IS NOT NULL
+			UNION
+			SELECT DISTINCT DATE(completed_at)
+			FROM media_items
+			WHERE user_id = $1 AND completed_at IS NOT NULL
+		),
+		groups AS (
+			SELECT d, d - (ROW_NUMBER() OVER (ORDER BY d))::int * INTERVAL '1 day' AS grp
+			FROM activity_dates
+		),
+		streak_lengths AS (
+			SELECT grp, COUNT(*) AS len, MAX(d) AS last_day
+			FROM groups GROUP BY grp
+		)
+		SELECT
+			COALESCE(MAX(len), 0),
+			COALESCE((
+				SELECT len FROM streak_lengths
+				WHERE last_day >= CURRENT_DATE - 1
+				ORDER BY last_day DESC LIMIT 1
+			), 0)
+		FROM streak_lengths
+	`, userID).Scan(&s.LongestStreakDays, &s.CurrentStreakDays)
 	if err != nil {
 		return nil, err
 	}
