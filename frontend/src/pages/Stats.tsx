@@ -17,8 +17,10 @@ export default function Stats() {
   if (!s) return null
 
   const totalItems = s.films.total + s.tv_shows.total + s.books.total + s.anime.total
-  const maxRatingCount = Math.max(...s.rating_distribution.map(b => b.count), 1)
-  const maxMonthCount = Math.max(...s.monthly_activity.map(m => m.count), 1)
+  const ratingDist = s.rating_distribution ?? []
+  const monthlyActivity = s.monthly_activity ?? []
+  const maxRatingCount = Math.max(...ratingDist.map(b => b.count), 1)
+  const maxMonthCount = Math.max(...monthlyActivity.map(m => m.count), 1)
 
   const typeCards = [
     { label: 'Movies',   total: s.films.total,    detail: `${s.films.this_month} this month`,          sub: s.films.avg_rating ? `Avg ${s.films.avg_rating.toFixed(1)} / 10` : null, colour: 'text-blue-400' },
@@ -78,12 +80,12 @@ export default function Stats() {
       </div>
 
       {/* Rating distribution */}
-      {s.rating_distribution.length > 0 && (
+      {ratingDist.length > 0 && (
         <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
           <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Rating distribution</p>
           <div className="flex items-end gap-1.5 h-20">
             {Array.from({ length: 10 }, (_, i) => i + 1).map((r) => {
-              const bucket = s.rating_distribution.find(b => b.rating === r)
+              const bucket = ratingDist.find(b => b.rating === r)
               const count = bucket?.count ?? 0
               const height = count > 0 ? Math.max((count / maxRatingCount) * 100, 8) : 0
               return (
@@ -106,11 +108,11 @@ export default function Stats() {
       )}
 
       {/* Monthly activity */}
-      {s.monthly_activity.length > 0 && (
+      {monthlyActivity.length > 0 && (
         <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
           <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
           <div className="flex items-end gap-1 h-20">
-            {s.monthly_activity.map(({ month, count }) => {
+            {monthlyActivity.map(({ month, count }) => {
               const height = count > 0 ? Math.max((count / maxMonthCount) * 100, 8) : 0
               const [y, m] = month.split('-')
               const label = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short' })
