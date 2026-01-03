@@ -25,6 +25,7 @@ export function useUpdateMedia() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: ['media', id] })
       qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
     },
   })
 }
@@ -33,7 +34,10 @@ export function useDeleteMedia() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => mediaApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['media'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+    },
   })
 }
 
@@ -41,6 +45,9 @@ export function useCreateMedia() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: Parameters<typeof mediaApi.create>[0]) => mediaApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['media'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['media'] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+    },
   })
 }
