@@ -1,30 +1,33 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { mediaApi } from '@/api/media'
-import type { MediaListParams } from '@/types/api'
+import { db } from '@/offline/db'
+import { enqueue } from '@/offline/queue'
 import type { MediaItem } from '@/types/media'
 
-export function useMediaList(params: MediaListParams) {
-  return useQuery({
-    queryKey: ['media', params],
-    queryFn: () => mediaApi.list(params).then((r) => r.data),
-  })
-}
-
-export function useMediaItem(id: number) {
-  return useQuery({
-    queryKey: ['media', id],
-    queryFn: () => mediaApi.get(id).then((r) => r.data),
-    enabled: id > 0,
-  })
-}
+// Read hooks are removed — use useLocalMediaList / useLocalMediaItem from useLocalMedia.ts
+// TanStack Query is kept only for server-side operations (search, stats, auth).
 
 export function useUpdateMedia() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<MediaItem> }) => mediaApi.update(id, data),
-    onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ queryKey: ['media', id] })
-      qc.invalidateQueries({ queryKey: ['media'] })
+    mutationFn: async ({ id, data }: { id: number; data: Partial<MediaItem> }) => {
+      // 1. Instant local write
+      const existing = await db.mediaItems.get(id)
+      if (existing) {
+        await db.mediaItems.put({ ...existing, ...data, updated_at: new Date().toISOString() })
+      }
+
+      // 2. Attempt server call; enqueue on failure
+      try {
+        const { data: updated } = await mediaApi.update(id, data)
+        await db.mediaItems.put(updated)
+        return updated
+      } catch {
+        await enqueue({ method: 'PATCH', url: `/media/${id}`, data, createdAt: Date.now(), retries: 0 })
+        return existing ? { ...existing, ...data } : data
+      }
+    },
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['stats'] })
     },
   })
@@ -33,9 +36,20 @@ export function useUpdateMedia() {
 export function useDeleteMedia() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => mediaApi.delete(id),
+    mutationFn: async (id: number) => {
+      // 1. Remove locally first
+      await db.mediaItems.delete(id)
+      await db.episodeLogs.where('media_item_id').equals(id).delete()
+      await db.chapterLogs.where('media_item_id').equals(id).delete()
+
+      // 2. Server delete; enqueue on failure
+      try {
+        await mediaApi.delete(id)
+      } catch {
+        await enqueue({ method: 'DELETE', url: `/media/${id}`, createdAt: Date.now(), retries: 0 })
+      }
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['media'] })
       qc.invalidateQueries({ queryKey: ['stats'] })
     },
   })
@@ -44,9 +58,13 @@ export function useDeleteMedia() {
 export function useCreateMedia() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Parameters<typeof mediaApi.create>[0]) => mediaApi.create(data),
+    mutationFn: async (data: Parameters<typeof mediaApi.create>[0]) => {
+      // Creates always require network — the server assigns the real ID
+      const { data: created } = await mediaApi.create(data)
+      await db.mediaItems.put(created)
+      return created
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['media'] })
       qc.invalidateQueries({ queryKey: ['stats'] })
     },
   })

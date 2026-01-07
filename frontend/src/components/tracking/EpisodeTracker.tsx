@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { episodesApi } from '@/api/episodes'
+import { useLocalEpisodes, useLogEpisode, useDeleteEpisode } from '@/hooks/useLocalEpisodes'
 import type { MediaItem, EpisodeLog } from '@/types/media'
 
 interface Season {
@@ -11,30 +10,10 @@ interface Season {
 interface Props { item: MediaItem }
 
 export default function EpisodeTracker({ item }: Props) {
-  const qc = useQueryClient()
   const seasons = (item.metadata?.seasons as Season[] | undefined) ?? []
-
-  const { data: episodes = [] } = useQuery({
-    queryKey: ['episodes', item.id],
-    queryFn: () => episodesApi.list(item.id).then((r) => r.data),
-  })
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['episodes', item.id] })
-    qc.invalidateQueries({ queryKey: ['media', item.id] })
-    qc.invalidateQueries({ queryKey: ['stats'] })
-  }
-
-  const log = useMutation({
-    mutationFn: ({ season, episode }: { season: number; episode: number }) =>
-      episodesApi.log(item.id, { season, episode }),
-    onSuccess: invalidate,
-  })
-
-  const remove = useMutation({
-    mutationFn: (epId: number) => episodesApi.delete(item.id, epId),
-    onSuccess: invalidate,
-  })
+  const episodes = useLocalEpisodes(item.id)
+  const log = useLogEpisode(item.id)
+  const remove = useDeleteEpisode(item.id)
 
   if (seasons.length > 0) {
     return (
@@ -88,8 +67,8 @@ export default function EpisodeTracker({ item }: Props) {
 
 function ManualEpisodeTracker({ episodes, log, remove }: {
   episodes: EpisodeLog[]
-  log: any
-  remove: any
+  log: ReturnType<typeof useLogEpisode>
+  remove: ReturnType<typeof useDeleteEpisode>
 }) {
   const [newSeason, setNewSeason] = useState(1)
   const [newEpisode, setNewEpisode] = useState(1)

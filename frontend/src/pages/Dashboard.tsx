@@ -1,12 +1,12 @@
 import { useAuth } from '@/hooks/useAuth'
-import { useMediaList } from '@/hooks/useMedia'
+import { useLocalMediaList } from '@/hooks/useLocalMedia'
 import MediaCard from '@/components/media/MediaCard'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import type { MediaItem } from '@/types/media'
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const { data: inProgress, isLoading } = useMediaList({ status: 'in_progress', per_page: 8 })
-  const { data: recentlyAdded } = useMediaList({ per_page: 8, sort: 'created_at', order: 'desc' })
+  const inProgress = useLocalMediaList({ status: 'in_progress', per_page: 8 })
+  const recentlyAdded = useLocalMediaList({ per_page: 8, sort: 'created_at', order: 'desc' })
 
   return (
     <div className="space-y-10">
@@ -21,13 +21,12 @@ export default function Dashboard() {
       {/* In progress */}
       <section>
         <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">In Progress</h2>
-        {isLoading && <LoadingSpinner />}
-        {!isLoading && (!inProgress || inProgress.items.length === 0) && (
+        {inProgress && inProgress.items.length === 0 && (
           <p className="text-zinc-600 text-sm">Nothing in progress yet.</p>
         )}
         {inProgress && inProgress.items.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-            {inProgress.items.map((item) => (
+            {inProgress.items.map((item: MediaItem) => (
               <MediaCard key={item.id} item={item} />
             ))}
           </div>
@@ -39,7 +38,7 @@ export default function Dashboard() {
         <section>
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Recently Added</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-            {recentlyAdded.items.map((item) => (
+            {recentlyAdded.items.map((item: MediaItem) => (
               <MediaCard key={item.id} item={item} />
             ))}
           </div>

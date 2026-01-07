@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { chaptersApi } from '@/api/chapters'
+import { useLocalChapters, useUpsertChapter } from '@/hooks/useLocalChapters'
+import { db } from '@/offline/db'
 import type { ChapterLog } from '@/types/media'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import type { ImportResult } from '@/api/chapters'
 
 interface Props { mediaId: number }
@@ -32,34 +33,34 @@ interface ChapterRowProps {
 }
 
 function ChapterRow({ ch, mediaId }: ChapterRowProps) {
-  const qc = useQueryClient()
+  const upsert = useUpsertChapter(mediaId)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(ch.note ?? '')
   const [titleDraft, setTitleDraft] = useState(ch.chapter_title ?? '')
   const [editingTitle, setEditingTitle] = useState(!ch.chapter_title)
 
-  const upsert = (fields: Partial<{ note: string; chapter_title: string }>) =>
-    chaptersApi.upsert(mediaId, {
+  const saveNote = useMutation({
+    mutationFn: (note: string) => upsert.mutateAsync({
       chapter_number: ch.chapter_number,
-      chapter_title: fields.chapter_title ?? ch.chapter_title ?? undefined,
+      chapter_title: ch.chapter_title ?? undefined,
       start_page: ch.start_page ?? undefined,
       end_page: ch.end_page ?? undefined,
       status: ch.status,
-      note: fields.note ?? ch.note ?? undefined,
-    })
-
-  const saveNote = useMutation({
-    mutationFn: (note: string) => upsert({ note }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['chapters', mediaId] })
-      setEditing(false)
-    },
+      note,
+    }),
+    onSuccess: () => setEditing(false),
   })
 
   const saveTitle = useMutation({
-    mutationFn: (title: string) => upsert({ chapter_title: title }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['chapters', mediaId] }),
+    mutationFn: (chapter_title: string) => upsert.mutateAsync({
+      chapter_number: ch.chapter_number,
+      chapter_title,
+      start_page: ch.start_page ?? undefined,
+      end_page: ch.end_page ?? undefined,
+      status: ch.status,
+      note: ch.note ?? undefined,
+    }),
   })
 
   const pageRange = ch.start_page && ch.end_page
@@ -166,10 +167,7 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
 
 export default function ChapterTracker({ mediaId }: Props) {
   const qc = useQueryClient()
-  const { data: chapters, isLoading } = useQuery({
-    queryKey: ['chapters', mediaId],
-    queryFn: () => chaptersApi.list(mediaId).then((r) => r.data),
-  })
+  const chapters = useLocalChapters(mediaId)
 
   const [showImport, setShowImport] = useState(false)
   const [importCount, setImportCount] = useState('')
@@ -177,15 +175,17 @@ export default function ChapterTracker({ mediaId }: Props) {
 
   const importChapters = useMutation({
     mutationFn: () => chaptersApi.import(mediaId, importCount ? +importCount : undefined).then((r) => r.data),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['chapters', mediaId] })
+    onSuccess: async (data) => {
+      // Refresh chapters in IndexedDB after import
+      const { data: fresh } = await chaptersApi.list(mediaId)
+      await db.chapterLogs.where('media_item_id').equals(mediaId).delete()
+      if (fresh.length > 0) await db.chapterLogs.bulkPut(fresh)
+      qc.invalidateQueries({ queryKey: ['stats'] })
       setImportResult(data)
       setShowImport(false)
       setImportCount('')
     },
   })
-
-  if (isLoading) return <LoadingSpinner />
 
   const list = chapters ?? []
   const reviewed = list.filter((c) => c.note).length
@@ -267,7 +267,6 @@ export default function ChapterTracker({ mediaId }: Props) {
             ))}
         </div>
       )}
-
     </div>
   )
 }
