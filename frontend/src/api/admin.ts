@@ -22,6 +22,8 @@ export interface AdminStats {
   total_episodes: number
   total_chapters: number
   unused_invites: number
+  db_size_bytes: number
+  db_size_human: string
   db_healthy: boolean
 }
 

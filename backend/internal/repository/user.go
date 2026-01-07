@@ -148,12 +148,14 @@ func (r *UserRepo) DeleteInvite(ctx context.Context, code string) error {
 }
 
 type AdminStats struct {
-	TotalUsers       int  `json:"total_users"`
-	TotalItems       int  `json:"total_items"`
-	TotalEpisodes    int  `json:"total_episodes"`
-	TotalChapters    int  `json:"total_chapters"`
-	UnusedInvites    int  `json:"unused_invites"`
-	DBHealthy        bool `json:"db_healthy"`
+	TotalUsers       int    `json:"total_users"`
+	TotalItems       int    `json:"total_items"`
+	TotalEpisodes    int    `json:"total_episodes"`
+	TotalChapters    int    `json:"total_chapters"`
+	UnusedInvites    int    `json:"unused_invites"`
+	DBSizeBytes      int64  `json:"db_size_bytes"`
+	DBSizeHuman      string `json:"db_size_human"`
+	DBHealthy        bool   `json:"db_healthy"`
 }
 
 func (r *UserRepo) GetAdminStats(ctx context.Context) (*AdminStats, error) {
@@ -164,8 +166,10 @@ func (r *UserRepo) GetAdminStats(ctx context.Context) (*AdminStats, error) {
 			(SELECT COUNT(*) FROM media_items),
 			(SELECT COUNT(*) FROM tv_episode_logs),
 			(SELECT COUNT(*) FROM book_chapter_logs),
-			(SELECT COUNT(*) FROM invite_codes WHERE used_at IS NULL)
-	`).Scan(&s.TotalUsers, &s.TotalItems, &s.TotalEpisodes, &s.TotalChapters, &s.UnusedInvites)
+			(SELECT COUNT(*) FROM invite_codes WHERE used_at IS NULL),
+			pg_database_size(current_database()),
+			pg_size_pretty(pg_database_size(current_database()))
+	`).Scan(&s.TotalUsers, &s.TotalItems, &s.TotalEpisodes, &s.TotalChapters, &s.UnusedInvites, &s.DBSizeBytes, &s.DBSizeHuman)
 	if err != nil {
 		s.DBHealthy = false
 	}
