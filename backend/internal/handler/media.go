@@ -541,6 +541,10 @@ func (h *MediaHandler) UpsertEpisode(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	// Auto-update item status based on progress
+	h.autoUpdateEpisodeStatus(r.Context(), item, userIDFrom(r))
+
 	jsonOK(w, log)
 }
 
@@ -639,6 +643,10 @@ func (h *MediaHandler) UpsertChapter(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	// Auto-update item status based on progress
+	h.autoUpdateChapterStatus(r.Context(), item, body.Status, userIDFrom(r))
+
 	jsonOK(w, log)
 }
 
@@ -766,4 +774,70 @@ func fetchOLChapters(ctx context.Context, client *http.Client, olKey string) ([]
 		})
 	}
 	return inputs, nil
+}
+
+// autoUpdateEpisodeStatus applies auto status rules after an episode is logged.
+func (h *MediaHandler) autoUpdateEpisodeStatus(ctx context.Context, item *models.MediaItem, userID int) {
+	today := time.Now().Format("2006-01-02")
+	upd := repository.UpdateMediaInput{}
+	changed := false
+
+	// Rule 1: move to in_progress when starting from want_to / on_hold / dropped
+	if item.Status == models.StatusWantTo || item.Status == models.StatusOnHold || item.Status == models.StatusDropped {
+		s := models.StatusInProgress
+		upd.Status = &s
+		if item.StartedAt == nil {
+			upd.StartedAt = &today
+		}
+		changed = true
+	}
+
+	// Rule 2: move to completed when all episodes are watched
+	if item.TotalProgress != nil && *item.TotalProgress > 0 {
+		watched, err := h.episodes.CountWatched(ctx, item.ID)
+		if err == nil && watched >= *item.TotalProgress {
+			s := models.StatusCompleted
+			upd.Status = &s
+			upd.CompletedAt = &today
+			changed = true
+		}
+	}
+
+	if changed {
+		h.media.Update(ctx, item.ID, userID, upd) //nolint:errcheck
+	}
+}
+
+// autoUpdateChapterStatus applies auto status rules after a chapter is logged.
+func (h *MediaHandler) autoUpdateChapterStatus(ctx context.Context, item *models.MediaItem, chapterStatus models.ChapterStatus, userID int) {
+	today := time.Now().Format("2006-01-02")
+	upd := repository.UpdateMediaInput{}
+	changed := false
+
+	// Rule 1: move to in_progress on any chapter activity from want_to / on_hold / dropped
+	if item.Status == models.StatusWantTo || item.Status == models.StatusOnHold || item.Status == models.StatusDropped {
+		s := models.StatusInProgress
+		upd.Status = &s
+		if item.StartedAt == nil {
+			upd.StartedAt = &today
+		}
+		changed = true
+	}
+
+	// Rule 2: move to completed when all chapters are done
+	if chapterStatus == models.ChapterCompleted && item.TotalProgress != nil && *item.TotalProgress > 0 {
+		counts, err := h.chapters.CountByStatus(ctx, item.ID)
+		if err == nil {
+			if counts[models.ChapterCompleted] >= *item.TotalProgress {
+				s := models.StatusCompleted
+				upd.Status = &s
+				upd.CompletedAt = &today
+				changed = true
+			}
+		}
+	}
+
+	if changed {
+		h.media.Update(ctx, item.ID, userID, upd) //nolint:errcheck
+	}
 }

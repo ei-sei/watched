@@ -167,6 +167,17 @@ func main() {
 		}
 	}()
 
+	// Background job: auto-move stale in_progress items to on_hold every 6 hours
+	go func() {
+		ticker := time.NewTicker(6 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := mediaRepo.AutoMarkInactive(context.Background()); err != nil {
+				log.Printf("auto-inactive: %v", err)
+			}
+		}
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
