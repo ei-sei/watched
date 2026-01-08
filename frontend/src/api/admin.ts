@@ -24,6 +24,7 @@ export interface AdminStats {
   unused_invites: number
   db_size_bytes: number
   db_size_human: string
+  db_size_limit_bytes: number
   db_healthy: boolean
   mem_total_kb: number
   mem_used_kb: number

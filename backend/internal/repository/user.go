@@ -148,17 +148,18 @@ func (r *UserRepo) DeleteInvite(ctx context.Context, code string) error {
 }
 
 type AdminStats struct {
-	TotalUsers       int    `json:"total_users"`
-	TotalItems       int    `json:"total_items"`
-	TotalEpisodes    int    `json:"total_episodes"`
-	TotalChapters    int    `json:"total_chapters"`
-	UnusedInvites    int    `json:"unused_invites"`
-	DBSizeBytes      int64  `json:"db_size_bytes"`
-	DBSizeHuman      string `json:"db_size_human"`
-	DBHealthy        bool   `json:"db_healthy"`
-	MemTotalKB       int64  `json:"mem_total_kb"`
-	MemUsedKB        int64  `json:"mem_used_kb"`
-	MemAvailableKB   int64  `json:"mem_available_kb"`
+	TotalUsers         int    `json:"total_users"`
+	TotalItems         int    `json:"total_items"`
+	TotalEpisodes      int    `json:"total_episodes"`
+	TotalChapters      int    `json:"total_chapters"`
+	UnusedInvites      int    `json:"unused_invites"`
+	DBSizeBytes        int64  `json:"db_size_bytes"`
+	DBSizeHuman        string `json:"db_size_human"`
+	DBSizeLimitBytes   int64  `json:"db_size_limit_bytes"`
+	DBHealthy          bool   `json:"db_healthy"`
+	MemTotalKB         int64  `json:"mem_total_kb"`
+	MemUsedKB          int64  `json:"mem_used_kb"`
+	MemAvailableKB     int64  `json:"mem_available_kb"`
 }
 
 func (r *UserRepo) GetAdminStats(ctx context.Context) (*AdminStats, error) {

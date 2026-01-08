@@ -250,6 +250,7 @@ func (h *UserHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats.MemTotalKB, stats.MemAvailableKB = readMemInfo()
 	stats.MemUsedKB = stats.MemTotalKB - stats.MemAvailableKB
+	stats.DBSizeLimitBytes = h.cfg.DBSizeLimitBytes
 	jsonOK(w, stats)
 }
 
