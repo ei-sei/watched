@@ -156,6 +156,9 @@ type AdminStats struct {
 	DBSizeBytes      int64  `json:"db_size_bytes"`
 	DBSizeHuman      string `json:"db_size_human"`
 	DBHealthy        bool   `json:"db_healthy"`
+	MemTotalKB       int64  `json:"mem_total_kb"`
+	MemUsedKB        int64  `json:"mem_used_kb"`
+	MemAvailableKB   int64  `json:"mem_available_kb"`
 }
 
 func (r *UserRepo) GetAdminStats(ctx context.Context) (*AdminStats, error) {

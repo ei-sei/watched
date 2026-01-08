@@ -54,14 +54,24 @@ function ConfirmDeleteModal({ username, onConfirm, onCancel }: {
   )
 }
 
+function fmtMB(kb: number) {
+  if (kb <= 0) return null
+  const mb = kb / 1024
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`
+}
+
 function StatsCard({ s }: { s: AdminStats }) {
   const items = [
-    { label: 'Users',        value: s.total_users },
-    { label: 'Library items', value: s.total_items },
+    { label: 'Users',           value: s.total_users },
+    { label: 'Library items',   value: s.total_items },
     { label: 'Episodes logged', value: s.total_episodes },
     { label: 'Chapters logged', value: s.total_chapters },
     { label: 'Unused invites',  value: s.unused_invites },
   ]
+
+  const memPct = s.mem_total_kb > 0 ? Math.round((s.mem_used_kb / s.mem_total_kb) * 100) : null
+  const memColor = memPct == null ? '' : memPct >= 90 ? 'bg-red-500' : memPct >= 70 ? 'bg-amber-400' : 'bg-emerald-500'
+
   return (
     <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
       <div className="flex items-center justify-between">
@@ -77,6 +87,7 @@ function StatsCard({ s }: { s: AdminStats }) {
           </span>
         </div>
       </div>
+
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
         {items.map(({ label, value }) => (
           <div key={label} className="space-y-0.5">
@@ -85,6 +96,20 @@ function StatsCard({ s }: { s: AdminStats }) {
           </div>
         ))}
       </div>
+
+      {memPct !== null && (
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center justify-between text-xs text-zinc-500">
+            <span>Server memory</span>
+            <span title={`${fmtMB(s.mem_used_kb)} used of ${fmtMB(s.mem_total_kb)}`}>
+              {fmtMB(s.mem_used_kb)} / {fmtMB(s.mem_total_kb)} ({memPct}%)
+            </span>
+          </div>
+          <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${memColor}`} style={{ width: `${memPct}%` }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
