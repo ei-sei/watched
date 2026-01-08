@@ -109,6 +109,10 @@ function InfraCard({ s }: { s: AdminStats }) {
     ? Math.round((s.mem_used_kb / s.mem_total_kb) * 100)
     : null
 
+  const diskPct = s.disk_total_bytes > 0
+    ? Math.round((s.disk_used_bytes / s.disk_total_bytes) * 100)
+    : null
+
   return (
     <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-4">
       <div className="flex items-center justify-between">
@@ -129,6 +133,17 @@ function InfraCard({ s }: { s: AdminStats }) {
         </div>
         {dbPct !== null && <UsageBar pct={dbPct} color={barColor(dbPct)} />}
       </div>
+
+      {/* Disk usage */}
+      {diskPct !== null && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-zinc-500">
+            <span>Disk usage</span>
+            <span>{fmtBytes(s.disk_used_bytes)} / {fmtBytes(s.disk_total_bytes)} ({diskPct}%)</span>
+          </div>
+          <UsageBar pct={diskPct} color={barColor(diskPct)} />
+        </div>
+      )}
 
       {/* Server memory */}
       {memPct !== null && (

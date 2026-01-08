@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/ei-sei/brsti/internal/auth"
 	"github.com/ei-sei/brsti/internal/config"
@@ -241,6 +242,18 @@ func readMemInfo() (totalKB, availableKB int64) {
 	return totalKB, availableKB
 }
 
+// readDiskUsage returns total and used bytes for the filesystem at the given path.
+// Returns zeros silently on error.
+func readDiskUsage(path string) (totalBytes, usedBytes int64) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return 0, 0
+	}
+	total := int64(stat.Blocks) * stat.Bsize
+	free  := int64(stat.Bavail) * stat.Bsize
+	return total, total - free
+}
+
 // GET /admin/stats
 func (h *UserHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.users.GetAdminStats(r.Context())
@@ -250,6 +263,7 @@ func (h *UserHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats.MemTotalKB, stats.MemAvailableKB = readMemInfo()
 	stats.MemUsedKB = stats.MemTotalKB - stats.MemAvailableKB
+	stats.DiskTotalBytes, stats.DiskUsedBytes = readDiskUsage("/")
 	stats.DBSizeLimitBytes = h.cfg.DBSizeLimitBytes
 	jsonOK(w, stats)
 }
