@@ -83,8 +83,12 @@ func (h *ImportHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := auth.ClaimsFrom(r.Context()).UserID
-	result := h.upsertAnimeList(r.Context(), userID, list.Anime)
+	result, toEnrich := h.upsertAnimeList(r.Context(), userID, list.Anime)
 	jsonOK(w, result)
+
+	if len(toEnrich) > 0 {
+		go h.enrichPosters(context.Background(), toEnrich)
+	}
 }
 
 // ── Username import (MAL API v2) ──────────────────────────────────────────────
@@ -153,8 +157,12 @@ func (h *ImportHandler) ImportUsername(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	result := h.upsertAnimeList(r.Context(), userID, items)
+	result, toEnrich := h.upsertAnimeList(r.Context(), userID, items)
 	jsonOK(w, result)
+
+	if len(toEnrich) > 0 {
+		go h.enrichPosters(context.Background(), toEnrich)
+	}
 }
 
 func (h *ImportHandler) fetchMALList(ctx context.Context, username string) (*malAPIResponse, error) {
@@ -196,6 +204,11 @@ func (h *ImportHandler) fetchMALList(ctx context.Context, username string) (*mal
 
 // ── Jikan poster enrichment ───────────────────────────────────────────────────
 
+type enrichItem struct {
+	id    int
+	malID int
+}
+
 func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
 	url := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d", malID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -223,6 +236,19 @@ func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
 	return raw.Data.Images.JPG.LargeImageURL
 }
 
+// enrichPosters fetches Jikan posters for newly imported items that had no
+// poster URL from the source data. Runs as a background goroutine after the
+// HTTP response has already been sent, so it uses a detached context.
+func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
+	for _, item := range items {
+		poster := h.jikanPoster(ctx, item.malID)
+		if poster != nil {
+			_ = h.media.SetPoster(ctx, item.id, *poster)
+		}
+		time.Sleep(350 * time.Millisecond)
+	}
+}
+
 // ── Shared upsert logic ────────────────────────────────────────────────────────
 
 type importResult struct {
@@ -231,8 +257,9 @@ type importResult struct {
 	Errors   []string `json:"errors"`
 }
 
-func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items []malXMLAnime) importResult {
+func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items []malXMLAnime) (importResult, []enrichItem) {
 	result := importResult{Errors: []string{}}
+	var toEnrich []enrichItem
 
 	for _, a := range items {
 		status, ok := malStatusMap[a.Status]
@@ -254,9 +281,12 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			continue
 		}
 
-		// Fetch poster from Jikan — rate limit to 1 req/s
-		poster := h.jikanPoster(ctx, a.ID)
-		time.Sleep(350 * time.Millisecond)
+		// Use the poster URL from the source data if available.
+		// Items without a poster are collected for background Jikan enrichment.
+		var poster *string
+		if a.Image != "" {
+			poster = &a.Image
+		}
 
 		var currentProgress, totalProgress *int
 		if a.Watched > 0 {
@@ -288,8 +318,12 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			_, _ = h.media.Update(ctx, created.ID, userID, repository.UpdateMediaInput{Rating: rating})
 		}
 
+		if poster == nil && created != nil {
+			toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID})
+		}
+
 		result.Imported++
 	}
 
-	return result
+	return result, toEnrich
 }

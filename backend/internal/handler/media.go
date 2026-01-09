@@ -467,6 +467,23 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, item)
 }
 
+// DELETE /media?type=film|tv_show|book|anime — delete all items of a type for the current user
+func (h *MediaHandler) ClearByType(w http.ResponseWriter, r *http.Request) {
+	mt := models.MediaType(r.URL.Query().Get("type"))
+	switch mt {
+	case models.MediaTypeFilm, models.MediaTypeTVShow, models.MediaTypeBook, models.MediaTypeAnime:
+	default:
+		jsonErr(w, http.StatusBadRequest, "type must be film, tv_show, book, or anime")
+		return
+	}
+	deleted, err := h.media.DeleteAllByType(r.Context(), userIDFrom(r), mt)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "failed to clear list")
+		return
+	}
+	jsonOK(w, map[string]int64{"deleted": deleted})
+}
+
 // DELETE /media/{id}
 func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))

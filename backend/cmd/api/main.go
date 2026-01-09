@@ -96,6 +96,7 @@ func main() {
 		r.Route("/media", func(r chi.Router) {
 			r.Get("/", mediaH.List)
 			r.Post("/", mediaH.Create)
+			r.Delete("/", mediaH.ClearByType)
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", mediaH.Get)
 				r.Patch("/", mediaH.Update)

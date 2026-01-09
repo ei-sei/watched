@@ -1,17 +1,66 @@
 import { useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { authApi } from '@/api/auth'
 import client from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
+import { db } from '@/offline/db'
+import type { MediaItem } from '@/types/media'
+
+type ClearTarget = {
+  type: MediaItem['media_type']
+  label: string
+}
+
+const CLEAR_TARGETS: ClearTarget[] = [
+  { type: 'film',    label: 'Films' },
+  { type: 'tv_show', label: 'TV Shows' },
+  { type: 'book',    label: 'Books' },
+  { type: 'anime',   label: 'Anime' },
+]
+
+function ConfirmClearModal({ label, onConfirm, onCancel }: {
+  label: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+      <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
+        <h2 className="text-white font-semibold">Clear {label}</h2>
+        <p className="text-zinc-400 text-sm">
+          This will permanently delete all <span className="text-white font-medium">{label}</span> from your library. This cannot be undone.
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+          >
+            Delete all
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Settings() {
   const { user } = useAuth()
   const { show } = useToast()
+  const qc = useQueryClient()
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [isPublic, setIsPublic] = useState(user?.is_public ?? false)
   const [pw, setPw] = useState({ current: '', next: '' })
   const [malUsername, setMalUsername] = useState('')
   const [importing, setImporting] = useState(false)
+  const [clearing, setClearing] = useState<MediaItem['media_type'] | null>(null)
+  const [confirmTarget, setConfirmTarget] = useState<ClearTarget | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const saveProfile = async () => {
@@ -80,12 +129,32 @@ export default function Settings() {
     }
   }
 
+  const clearList = async (target: ClearTarget) => {
+    setClearing(target.type)
+    setConfirmTarget(null)
+    try {
+      const { data } = await client.delete(`/media?type=${target.type}`)
+      // Remove from IndexedDB immediately so the UI reflects the deletion
+      const ids = await db.mediaItems
+        .where('media_type').equals(target.type)
+        .primaryKeys()
+      await db.mediaItems.bulkDelete(ids as number[])
+      qc.invalidateQueries({ queryKey: ['stats'] })
+      show(`Deleted ${data.deleted} ${target.label.toLowerCase()}`, 'success')
+    } catch {
+      show(`Failed to clear ${target.label.toLowerCase()}`, 'error')
+    } finally {
+      setClearing(null)
+    }
+  }
+
   const inputClass = "w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-3 py-2 text-sm border border-white/[0.08] focus:outline-none focus:border-white/20"
   const sectionClass = "bg-[#161616] rounded-xl p-5 space-y-4 ring-1 ring-white/[0.06]"
   const labelClass = "block text-xs text-zinc-500 mb-1.5"
   const btnClass = "bg-white/8 hover:bg-white/12 text-zinc-200 px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-40"
 
   return (
+    <>
     <div className="max-w-md space-y-6">
       <h1 className="text-2xl font-semibold text-white tracking-tight">Settings</h1>
 
@@ -166,6 +235,26 @@ export default function Settings() {
         <button type="submit" className={btnClass}>Change password</button>
       </form>
 
+      {/* Clear lists */}
+      <div className={sectionClass}>
+        <div>
+          <h2 className="text-sm font-medium text-zinc-300">Clear library</h2>
+          <p className="text-xs text-zinc-600 mt-1">Permanently delete all entries from a category.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {CLEAR_TARGETS.map((target) => (
+            <button
+              key={target.type}
+              onClick={() => setConfirmTarget(target)}
+              disabled={clearing === target.type}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm text-red-400 bg-red-500/[0.08] hover:bg-red-500/[0.14] border border-red-500/[0.15] transition-colors disabled:opacity-40"
+            >
+              {clearing === target.type ? 'Clearing…' : `Clear ${target.label}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* MAL Import */}
       <div className={sectionClass}>
         <div>
@@ -215,5 +304,14 @@ export default function Settings() {
         </div>
       </div>
     </div>
+
+    {confirmTarget && (
+      <ConfirmClearModal
+        label={confirmTarget.label}
+        onConfirm={() => clearList(confirmTarget)}
+        onCancel={() => setConfirmTarget(null)}
+      />
+    )}
+    </>
   )
 }
