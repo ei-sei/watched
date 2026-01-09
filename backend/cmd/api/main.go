@@ -138,8 +138,9 @@ func main() {
 		r.Get("/stats/summary", statsH.Summary)
 
 		// Import
-		r.Post("/import/mal/file", importH.ImportXML)
-		r.Post("/import/mal/username", importH.ImportUsername)
+		r.Post("/import/mal", importH.ImportMAL)
+		r.Post("/import/letterboxd", importH.ImportLetterboxd)
+		r.Post("/import/goodreads", importH.ImportGoodreads)
 
 		// Admin
 		r.Group(func(r chi.Router) {

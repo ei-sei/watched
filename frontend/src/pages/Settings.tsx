@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { authApi } from '@/api/auth'
@@ -6,6 +6,169 @@ import client from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
 import { db } from '@/offline/db'
 import type { MediaItem } from '@/types/media'
+
+// ── Import card ────────────────────────────────────────────────────────────────
+
+type ImportService = {
+  id: string
+  name: string
+  subtitle: string
+  accept: string
+  hint: string
+  endpoint: string
+}
+
+const IMPORT_SERVICES: ImportService[] = [
+  {
+    id: 'mal',
+    name: 'MyAnimeList',
+    subtitle: 'Import your anime list',
+    accept: '.xml',
+    hint: 'MAL → Profile → Export My List → Export Anime List',
+    endpoint: '/import/mal',
+  },
+  {
+    id: 'letterboxd',
+    name: 'Letterboxd',
+    subtitle: 'Import films you have watched or want to watch',
+    accept: '.csv',
+    hint: 'Letterboxd → Profile → Import & Export → Export Your Data',
+    endpoint: '/import/letterboxd',
+  },
+  {
+    id: 'goodreads',
+    name: 'Goodreads',
+    subtitle: 'Import your book library',
+    accept: '.csv',
+    hint: 'Goodreads → My Books → Import and Export → Export Library',
+    endpoint: '/import/goodreads',
+  },
+]
+
+function useImportProgress(importing: boolean) {
+  const [progress, setProgress] = useState(0)
+  const startRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!importing) return
+    startRef.current = Date.now()
+    // Asymptotically approach 90% so it never appears stuck
+    const id = setInterval(() => {
+      const elapsed = Date.now() - (startRef.current ?? Date.now())
+      setProgress(90 * (1 - Math.exp(-elapsed / 5000)))
+    }, 80)
+    return () => {
+      clearInterval(id)
+      setProgress(0)
+    }
+  }, [importing])
+
+  return progress
+}
+
+function ImportCard() {
+  const { show } = useToast()
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const [importing, setImporting] = useState(false)
+  const [activeService, setActiveService] = useState<string | null>(null)
+  const [lastResult, setLastResult] = useState<{ service: string; imported: number; skipped: number } | null>(null)
+  const rawProgress = useImportProgress(importing)
+  const displayProgress = importing ? rawProgress : lastResult ? 100 : 0
+
+  const handleFile = async (service: ImportService, file: File) => {
+    setImporting(true)
+    setActiveService(service.id)
+    setLastResult(null)
+
+    const form = new FormData()
+    form.append('file', file)
+
+    try {
+      const { data } = await client.post(service.endpoint, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setLastResult({ service: service.name, imported: data.imported, skipped: data.skipped })
+      show(`Imported ${data.imported}, skipped ${data.skipped}`, 'success')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      show(msg ?? 'Import failed', 'error')
+      setLastResult(null)
+    } finally {
+      setImporting(false)
+      setActiveService(null)
+      const ref = fileRefs.current[service.id]
+      if (ref) ref.value = ''
+    }
+  }
+
+  const sectionClass = 'bg-[#161616] rounded-xl p-5 space-y-4 ring-1 ring-white/[0.06]'
+
+  return (
+    <div className={sectionClass}>
+      <div>
+        <h2 className="text-sm font-medium text-zinc-300">Import library</h2>
+        <p className="text-xs text-zinc-600 mt-1">Upload an export file to add entries to your library.</p>
+      </div>
+
+      <div className="space-y-4">
+        {IMPORT_SERVICES.map((svc, i) => (
+          <div key={svc.id}>
+            {i > 0 && <div className="border-t border-white/[0.05] mb-4" />}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-zinc-200 font-medium">{svc.name}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{svc.subtitle}</p>
+                <p className="text-xs text-zinc-700 mt-1">{svc.hint}</p>
+              </div>
+              <label
+                className={`flex-shrink-0 cursor-pointer px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors ${importing ? 'opacity-40 pointer-events-none' : ''}`}
+              >
+                {activeService === svc.id ? 'Uploading…' : `Upload ${svc.accept.replace('.', '').toUpperCase()}`}
+                <input
+                  ref={(el) => { fileRefs.current[svc.id] = el }}
+                  type="file"
+                  accept={svc.accept}
+                  className="sr-only"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFile(svc, file)
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress bar — shown while importing or after completion */}
+      {(importing || lastResult) && (
+        <div className="space-y-1.5 pt-1">
+          <div className="w-full bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
+            <div
+              className="h-full bg-indigo-500 rounded-full transition-all duration-200"
+              style={{ width: `${displayProgress}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-zinc-500">
+              {importing
+                ? 'Importing…'
+                : lastResult
+                  ? `${lastResult.imported} imported, ${lastResult.skipped} skipped`
+                  : ''}
+            </span>
+            {!importing && (
+              <span className="text-xs text-zinc-600">{lastResult?.service}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Danger zone ────────────────────────────────────────────────────────────────
 
 type ClearTarget = {
   type: MediaItem['media_type']
@@ -29,7 +192,8 @@ function ConfirmClearModal({ label, onConfirm, onCancel }: {
       <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
         <h2 className="text-white font-semibold">Clear {label}</h2>
         <p className="text-zinc-400 text-sm">
-          This will permanently delete all <span className="text-white font-medium">{label}</span> from your library. This cannot be undone.
+          This will permanently delete all{' '}
+          <span className="text-white font-medium">{label}</span> from your library. This cannot be undone.
         </p>
         <div className="flex gap-2 justify-end">
           <button
@@ -50,6 +214,8 @@ function ConfirmClearModal({ label, onConfirm, onCancel }: {
   )
 }
 
+// ── Main page ──────────────────────────────────────────────────────────────────
+
 export default function Settings() {
   const { user } = useAuth()
   const { show } = useToast()
@@ -57,11 +223,8 @@ export default function Settings() {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [isPublic, setIsPublic] = useState(user?.is_public ?? false)
   const [pw, setPw] = useState({ current: '', next: '' })
-  const [malUsername, setMalUsername] = useState('')
-  const [importing, setImporting] = useState(false)
   const [clearing, setClearing] = useState<MediaItem['media_type'] | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<ClearTarget | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const saveProfile = async () => {
     try {
@@ -94,50 +257,12 @@ export default function Settings() {
     }
   }
 
-  const importByUsername = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!malUsername.trim()) return
-    setImporting(true)
-    try {
-      const { data } = await client.post('/import/mal/username', { username: malUsername.trim() })
-      show(`Imported ${data.imported} anime, skipped ${data.skipped}`, 'success')
-      setMalUsername('')
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      show(msg ?? 'Import failed', 'error')
-    } finally {
-      setImporting(false)
-    }
-  }
-
-  const importByFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImporting(true)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const { data } = await client.post('/import/mal/file', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      show(`Imported ${data.imported} anime, skipped ${data.skipped}`, 'success')
-    } catch {
-      show('Invalid MAL export file', 'error')
-    } finally {
-      setImporting(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
   const clearList = async (target: ClearTarget) => {
     setClearing(target.type)
     setConfirmTarget(null)
     try {
       const { data } = await client.delete(`/media?type=${target.type}`)
-      // Remove from IndexedDB immediately so the UI reflects the deletion
-      const ids = await db.mediaItems
-        .where('media_type').equals(target.type)
-        .primaryKeys()
+      const ids = await db.mediaItems.where('media_type').equals(target.type).primaryKeys()
       await db.mediaItems.bulkDelete(ids as number[])
       qc.invalidateQueries({ queryKey: ['stats'] })
       show(`Deleted ${data.deleted} ${target.label.toLowerCase()}`, 'success')
@@ -148,170 +273,130 @@ export default function Settings() {
     }
   }
 
-  const inputClass = "w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-3 py-2 text-sm border border-white/[0.08] focus:outline-none focus:border-white/20"
-  const sectionClass = "bg-[#161616] rounded-xl p-5 space-y-4 ring-1 ring-white/[0.06]"
-  const labelClass = "block text-xs text-zinc-500 mb-1.5"
-  const btnClass = "bg-white/8 hover:bg-white/12 text-zinc-200 px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-40"
+  const inputClass = 'w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-3 py-2 text-sm border border-white/[0.08] focus:outline-none focus:border-white/20'
+  const sectionClass = 'bg-[#161616] rounded-xl p-5 space-y-4 ring-1 ring-white/[0.06]'
+  const labelClass = 'block text-xs text-zinc-500 mb-1.5'
+  const btnClass = 'bg-white/8 hover:bg-white/12 text-zinc-200 px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-40'
 
   return (
     <>
-    <div className="max-w-md space-y-6">
-      <h1 className="text-2xl font-semibold text-white tracking-tight">Settings</h1>
+      <div className="max-w-md space-y-6">
+        <h1 className="text-2xl font-semibold text-white tracking-tight">Settings</h1>
 
-      {/* Profile */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium text-zinc-300">Profile</h2>
-        <div>
-          <label className={labelClass}>Username</label>
-          <p className="text-zinc-400 text-sm">{user?.username}</p>
-        </div>
-        <div>
-          <label className={labelClass}>Display name</label>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-        <button onClick={saveProfile} className={btnClass}>Save</button>
-      </div>
-
-      {/* Privacy */}
-      <div className={sectionClass}>
-        <h2 className="text-sm font-medium text-zinc-300">Privacy</h2>
-        <div className="flex items-center justify-between">
+        {/* Profile */}
+        <div className={sectionClass}>
+          <h2 className="text-sm font-medium text-zinc-300">Profile</h2>
           <div>
-            <p className="text-sm text-zinc-300">Public profile</p>
-            <p className="text-xs text-zinc-600 mt-0.5">
-              {isPublic
-                ? `Anyone can view your library at /u/${user?.username}`
-                : 'Only you can see your library'}
-            </p>
+            <label className={labelClass}>Username</label>
+            <p className="text-zinc-400 text-sm">{user?.username}</p>
           </div>
-          <button
-            onClick={() => togglePublic(!isPublic)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${
-              isPublic ? 'bg-indigo-600' : 'bg-white/10'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${
-                isPublic ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </div>
-        {isPublic && (
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs text-zinc-400 bg-[#111] px-3 py-1.5 rounded-md border border-white/[0.06] truncate">
-              {window.location.origin}/u/{user?.username}
-            </code>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/u/${user?.username}`)
-                show('Link copied', 'success')
-              }}
-              className={btnClass}
-            >
-              Copy
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Change password */}
-      <form onSubmit={changePassword} className={sectionClass}>
-        <h2 className="text-sm font-medium text-zinc-300">Change password</h2>
-        <div>
-          <label className={labelClass}>Current password</label>
-          <input type="password" value={pw.current} onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
-            className={inputClass} required />
-        </div>
-        <div>
-          <label className={labelClass}>New password</label>
-          <input type="password" value={pw.next} onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
-            className={inputClass} required minLength={8} />
-        </div>
-        <button type="submit" className={btnClass}>Change password</button>
-      </form>
-
-      {/* Clear lists */}
-      <div className={sectionClass}>
-        <div>
-          <h2 className="text-sm font-medium text-zinc-300">Clear library</h2>
-          <p className="text-xs text-zinc-600 mt-1">Permanently delete all entries from a category.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {CLEAR_TARGETS.map((target) => (
-            <button
-              key={target.type}
-              onClick={() => setConfirmTarget(target)}
-              disabled={clearing === target.type}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm text-red-400 bg-red-500/[0.08] hover:bg-red-500/[0.14] border border-red-500/[0.15] transition-colors disabled:opacity-40"
-            >
-              {clearing === target.type ? 'Clearing…' : `Clear ${target.label}`}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* MAL Import */}
-      <div className={sectionClass}>
-        <div>
-          <h2 className="text-sm font-medium text-zinc-300">Import from MyAnimeList</h2>
-          <p className="text-xs text-zinc-600 mt-1">Your anime list will be imported into the Anime section.</p>
-        </div>
-
-        {/* By username */}
-        <form onSubmit={importByUsername} className="space-y-3">
           <div>
-            <label className={labelClass}>MAL username</label>
+            <label className={labelClass}>Display name</label>
             <input
-              value={malUsername}
-              onChange={(e) => setMalUsername(e.target.value)}
-              placeholder="e.g. animeboy"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
               className={inputClass}
             />
-            <p className="text-xs text-zinc-700 mt-1.5">Requires MAL_CLIENT_ID to be set on the server.</p>
           </div>
-          <button type="submit" disabled={importing || !malUsername.trim()} className={btnClass}>
-            {importing ? 'Importing…' : 'Import by username'}
-          </button>
+          <button onClick={saveProfile} className={btnClass}>Save</button>
+        </div>
+
+        {/* Privacy */}
+        <div className={sectionClass}>
+          <h2 className="text-sm font-medium text-zinc-300">Privacy</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-zinc-300">Public profile</p>
+              <p className="text-xs text-zinc-600 mt-0.5">
+                {isPublic
+                  ? `Anyone can view your library at /u/${user?.username}`
+                  : 'Only you can see your library'}
+              </p>
+            </div>
+            <button
+              onClick={() => togglePublic(!isPublic)}
+              className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${
+                isPublic ? 'bg-indigo-600' : 'bg-white/10'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${
+                  isPublic ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          {isPublic && (
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-xs text-zinc-400 bg-[#111] px-3 py-1.5 rounded-md border border-white/[0.06] truncate">
+                {window.location.origin}/u/{user?.username}
+              </code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/u/${user?.username}`)
+                  show('Link copied', 'success')
+                }}
+                className={btnClass}
+              >
+                Copy
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Change password */}
+        <form onSubmit={changePassword} className={sectionClass}>
+          <h2 className="text-sm font-medium text-zinc-300">Change password</h2>
+          <div>
+            <label className={labelClass}>Current password</label>
+            <input type="password" value={pw.current} onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
+              className={inputClass} required />
+          </div>
+          <div>
+            <label className={labelClass}>New password</label>
+            <input type="password" value={pw.next} onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
+              className={inputClass} required minLength={8} />
+          </div>
+          <button type="submit" className={btnClass}>Change password</button>
         </form>
 
-        <div className="flex items-center gap-3">
-          <div className="flex-1 border-t border-white/[0.06]" />
-          <span className="text-xs text-zinc-700">or</span>
-          <div className="flex-1 border-t border-white/[0.06]" />
+        {/* Import */}
+        <ImportCard />
+
+        {/* Danger zone */}
+        <div className="relative flex items-center gap-3 pt-2">
+          <div className="flex-1 border-t border-red-900/40" />
+          <span className="text-xs text-red-900 font-medium tracking-wide uppercase">Danger zone</span>
+          <div className="flex-1 border-t border-red-900/40" />
         </div>
 
-        {/* By XML file */}
-        <div className="space-y-2">
-          <label className={labelClass}>
-            Upload MAL export XML
-            <span className="block text-zinc-700 font-normal mt-0.5">
-              MAL → Profile → Export my List → Export Anime List
-            </span>
-          </label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xml"
-            onChange={importByFile}
-            disabled={importing}
-            className="w-full text-xs text-zinc-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-white/8 file:text-zinc-300 file:text-xs file:cursor-pointer hover:file:bg-white/12 disabled:opacity-40"
-          />
+        <div className={sectionClass}>
+          <div>
+            <h2 className="text-sm font-medium text-zinc-300">Clear library</h2>
+            <p className="text-xs text-zinc-600 mt-1">Permanently delete all entries from a category.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {CLEAR_TARGETS.map((target) => (
+              <button
+                key={target.type}
+                onClick={() => setConfirmTarget(target)}
+                disabled={clearing === target.type}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm text-red-400 bg-red-500/[0.08] hover:bg-red-500/[0.14] border border-red-500/[0.15] transition-colors disabled:opacity-40"
+              >
+                {clearing === target.type ? 'Clearing…' : `Clear ${target.label}`}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
 
-    {confirmTarget && (
-      <ConfirmClearModal
-        label={confirmTarget.label}
-        onConfirm={() => clearList(confirmTarget)}
-        onCancel={() => setConfirmTarget(null)}
-      />
-    )}
+      {confirmTarget && (
+        <ConfirmClearModal
+          label={confirmTarget.label}
+          onConfirm={() => clearList(confirmTarget)}
+          onCancel={() => setConfirmTarget(null)}
+        />
+      )}
     </>
   )
 }
