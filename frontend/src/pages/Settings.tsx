@@ -218,6 +218,7 @@ function ConfirmClearModal({ label, onConfirm, onCancel }: {
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const [input, setInput] = useState('')
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
       <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
@@ -226,6 +227,18 @@ function ConfirmClearModal({ label, onConfirm, onCancel }: {
           This will permanently delete all{' '}
           <span className="text-white font-medium">{label}</span> from your library. This cannot be undone.
         </p>
+        <div>
+          <p className="text-zinc-500 text-xs mb-1.5">
+            Type <span className="text-white font-mono">Delete</span> to confirm
+          </p>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-red-500/50 text-sm font-mono"
+            placeholder="Delete"
+            autoFocus
+          />
+        </div>
         <div className="flex gap-2 justify-end">
           <button
             onClick={onCancel}
@@ -235,7 +248,8 @@ function ConfirmClearModal({ label, onConfirm, onCancel }: {
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+            disabled={input !== 'Delete'}
+            className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-md transition-colors"
           >
             Delete all
           </button>
