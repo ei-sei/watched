@@ -192,6 +192,17 @@ func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
 	return raw.Data.Images.JPG.LargeImageURL
 }
 
+// GET /import/posters/missing-count
+func (h *ImportHandler) MissingPosterCount(w http.ResponseWriter, r *http.Request) {
+	userID := auth.ClaimsFrom(r.Context()).UserID
+	missing, err := h.media.GetAnimeMissingPosters(r.Context(), userID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "failed to query missing posters")
+		return
+	}
+	jsonOK(w, map[string]int{"count": len(missing)})
+}
+
 // POST /import/posters/refetch
 // Finds all of the user's anime with a mal_id but no poster, responds
 // immediately with the count, then fetches posters in the background.
