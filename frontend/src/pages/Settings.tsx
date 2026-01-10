@@ -73,21 +73,34 @@ function ImportCard() {
   const [activeService, setActiveService] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<{ service: string; imported: number; skipped: number } | null>(null)
   const [refetching, setRefetching] = useState(false)
+  const [posterProgress, setPosterProgress] = useState<{ current: number; total: number } | null>(null)
   const rawProgress = useImportProgress(importing)
   const displayProgress = importing ? rawProgress : lastResult ? 100 : 0
 
   const refetchPosters = async () => {
     setRefetching(true)
+    setPosterProgress(null)
     try {
       const { data } = await client.post('/import/posters/refetch')
       if (data.queued === 0) {
         show('No missing posters found', 'success')
-      } else {
-        show(`Fetching posters for ${data.queued} anime in the background`, 'success')
+        return
       }
+      const total: number = data.queued
+      const msPerItem = 350
+      const startedAt = Date.now()
+      setPosterProgress({ current: 0, total })
+      const id = setInterval(() => {
+        const elapsed = Date.now() - startedAt
+        const estimated = Math.min(Math.floor(elapsed / msPerItem), total)
+        setPosterProgress({ current: estimated, total })
+        if (estimated >= total) {
+          clearInterval(id)
+          setRefetching(false)
+        }
+      }, msPerItem)
     } catch {
       show('Failed to start poster fetch', 'error')
-    } finally {
       setRefetching(false)
     }
   }
@@ -158,18 +171,35 @@ function ImportCard() {
         ))}
       </div>
 
-      <div className="border-t border-white/[0.05] pt-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm text-zinc-300">Fetch missing posters</p>
-          <p className="text-xs text-zinc-600 mt-0.5">Re-runs poster lookup for anime imported without one.</p>
+      <div className="border-t border-white/[0.05] pt-3 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm text-zinc-300">Fetch missing posters</p>
+            <p className="text-xs text-zinc-600 mt-0.5">Re-runs poster lookup for anime imported without one.</p>
+          </div>
+          <button
+            onClick={refetchPosters}
+            disabled={refetching || importing}
+            className="flex-shrink-0 px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors disabled:opacity-40"
+          >
+            {refetching ? 'Fetching…' : 'Fetch'}
+          </button>
         </div>
-        <button
-          onClick={refetchPosters}
-          disabled={refetching || importing}
-          className="flex-shrink-0 px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors disabled:opacity-40"
-        >
-          {refetching ? 'Queuing…' : 'Fetch'}
-        </button>
+        {posterProgress && (
+          <div className="space-y-1">
+            <div className="w-full bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                style={{ width: `${(posterProgress.current / posterProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs text-zinc-500">
+              {posterProgress.current < posterProgress.total
+                ? `${posterProgress.current} / ${posterProgress.total} posters fetched…`
+                : `Done — ${posterProgress.total} posters fetched`}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Progress bar — shown while importing or after completion */}
