@@ -192,6 +192,30 @@ func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
 	return raw.Data.Images.JPG.LargeImageURL
 }
 
+// POST /import/posters/refetch
+// Finds all of the user's anime with a mal_id but no poster, responds
+// immediately with the count, then fetches posters in the background.
+func (h *ImportHandler) RefetchPosters(w http.ResponseWriter, r *http.Request) {
+	userID := auth.ClaimsFrom(r.Context()).UserID
+
+	missing, err := h.media.GetAnimeMissingPosters(r.Context(), userID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "failed to query missing posters")
+		return
+	}
+
+	items := make([]enrichItem, len(missing))
+	for i, m := range missing {
+		items[i] = enrichItem{id: m.ID, malID: m.MalID}
+	}
+
+	jsonOK(w, map[string]int{"queued": len(items)})
+
+	if len(items) > 0 {
+		go h.enrichPosters(context.Background(), items)
+	}
+}
+
 // enrichPosters runs in a background goroutine after the response is sent.
 func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
 	for _, item := range items {
