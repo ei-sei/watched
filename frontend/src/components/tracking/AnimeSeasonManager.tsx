@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, X } from 'lucide-react'
 import { mediaApi } from '@/api/media'
+import { db } from '@/offline/db'
 import { useToast } from '@/components/ui/Toast'
 import type { MediaItem } from '@/types/media'
 
@@ -22,6 +23,7 @@ export default function AnimeSeasonManager({ item }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<JikanResult[]>([])
   const [searching, setSearching] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
   const openAndSearch = async () => {
     setOpen(true)
@@ -43,9 +45,13 @@ export default function AnimeSeasonManager({ item }: Props) {
   const seasons = (item.metadata?.seasons as { season_number: number; episode_count: number; mal_id?: number }[] | undefined) ?? []
 
   const addSeason = useMutation({
-    mutationFn: (malId: number) => mediaApi.addSeason(item.id, malId),
+    mutationFn: async (malId: number) => {
+      const { data: updated } = await mediaApi.addSeason(item.id, malId)
+      await db.mediaItems.put(updated)
+      return updated
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['media', item.id] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
       setOpen(false)
       setQuery('')
       setResults([])
@@ -55,8 +61,16 @@ export default function AnimeSeasonManager({ item }: Props) {
   })
 
   const removeSeason = useMutation({
-    mutationFn: (seasonNum: number) => mediaApi.removeSeason(item.id, seasonNum),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['media', item.id] }),
+    mutationFn: async (seasonNum: number) => {
+      const { data: updated } = await mediaApi.removeSeason(item.id, seasonNum)
+      await db.mediaItems.put(updated)
+      return updated
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stats'] })
+      setConfirmDelete(null)
+      show('Season removed', 'success')
+    },
     onError: () => show('Failed to remove season', 'error'),
   })
 
@@ -95,14 +109,32 @@ export default function AnimeSeasonManager({ item }: Props) {
               <span className="text-zinc-400">Season {s.season_number}</span>
               <div className="flex items-center gap-3">
                 <span className="text-zinc-600 tabular-nums">{s.episode_count} eps</span>
-                {seasons.length > 1 && (
-                  <button
-                    onClick={() => removeSeason.mutate(s.season_number)}
-                    disabled={removeSeason.isPending}
-                    className="text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-30"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                {s.season_number > 1 && (
+                  confirmDelete === s.season_number ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-zinc-500">Remove?</span>
+                      <button
+                        onClick={() => removeSeason.mutate(s.season_number)}
+                        disabled={removeSeason.isPending}
+                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(null)}
+                        className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDelete(s.season_number)}
+                      className="text-zinc-700 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )
                 )}
               </div>
             </div>
