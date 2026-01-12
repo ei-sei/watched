@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-import { episodesApi } from '@/api/episodes'
+import { useLocalEpisodes } from '@/hooks/useLocalEpisodes'
 import type { MediaItem } from '@/types/media'
 
 interface Season {
@@ -9,11 +8,7 @@ interface Season {
 
 export default function TVSeasonProgress({ item }: { item: MediaItem }) {
   const seasons = (item.metadata?.seasons as Season[] | undefined) ?? []
-
-  const { data: episodes = [] } = useQuery({
-    queryKey: ['episodes', item.id],
-    queryFn: () => episodesApi.list(item.id).then((r) => r.data),
-  })
+  const episodes = useLocalEpisodes(item.id) ?? []
 
   const watchedBySeason = episodes.reduce<Record<number, number>>((acc, ep) => {
     acc[ep.season_number] = (acc[ep.season_number] ?? 0) + 1
