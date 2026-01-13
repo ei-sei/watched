@@ -55,11 +55,16 @@ func (h *MediaHandler) fetchJikanData(ctx context.Context, malID string) *tmdbTV
 			Episodes *int `json:"episodes"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || raw.Data.Episodes == nil || *raw.Data.Episodes == 0 {
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil
 	}
+	// episodes is null for ongoing long-running anime (e.g. One Piece, Detective Conan)
+	episodeCount := 0
+	if raw.Data.Episodes != nil && *raw.Data.Episodes > 0 {
+		episodeCount = *raw.Data.Episodes
+	}
 	seasons := []map[string]any{
-		{"season_number": 1, "episode_count": *raw.Data.Episodes},
+		{"season_number": 1, "episode_count": episodeCount},
 	}
 	return &tmdbTVData{TotalEpisodes: raw.Data.Episodes, Seasons: seasons}
 }
@@ -254,7 +259,7 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "only tv shows and anime can be refreshed")
 		return
 	}
-	if tvData == nil || tvData.TotalEpisodes == nil {
+	if tvData == nil {
 		jsonErr(w, http.StatusServiceUnavailable, "could not fetch episode data")
 		return
 	}
@@ -266,6 +271,7 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	if len(tvData.Seasons) > 0 {
 		meta["seasons"] = tvData.Seasons
 	}
+	// TotalProgress is nil for ongoing anime with unknown episode count — don't overwrite
 	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
 		TotalProgress: tvData.TotalEpisodes,
 		Metadata:      meta,
@@ -306,7 +312,7 @@ func (h *MediaHandler) AddAnimeSeason(w http.ResponseWriter, r *http.Request) {
 	}
 	malID := fmt.Sprintf("%d", body.MalID)
 	data := h.fetchJikanData(r.Context(), malID)
-	if data == nil || data.TotalEpisodes == nil {
+	if data == nil {
 		jsonErr(w, http.StatusServiceUnavailable, "could not fetch episode data from MAL")
 		return
 	}
@@ -328,13 +334,18 @@ func (h *MediaHandler) AddAnimeSeason(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	nextSeason := len(existing) + 1
+	// episode_count is 0 for ongoing anime with unknown total
+	episodeCount := 0
+	if data.TotalEpisodes != nil {
+		episodeCount = *data.TotalEpisodes
+	}
 	existing = append(existing, map[string]any{
 		"season_number": nextSeason,
-		"episode_count": *data.TotalEpisodes,
+		"episode_count": episodeCount,
 		"mal_id":        body.MalID,
 	})
 	meta["seasons"] = existing
-	// Recalculate total episodes
+	// Recalculate total episodes; if all seasons are ongoing (count=0), leave total as nil
 	total := 0
 	for _, s := range existing {
 		if ec, ok := s["episode_count"].(int); ok {
@@ -343,8 +354,12 @@ func (h *MediaHandler) AddAnimeSeason(w http.ResponseWriter, r *http.Request) {
 			total += int(ec)
 		}
 	}
+	var totalPtr *int
+	if total > 0 {
+		totalPtr = &total
+	}
 	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
-		TotalProgress: &total,
+		TotalProgress: totalPtr,
 		Metadata:      meta,
 	})
 	if err != nil || updated == nil {

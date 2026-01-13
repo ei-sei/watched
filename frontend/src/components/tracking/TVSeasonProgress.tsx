@@ -23,7 +23,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
     return (
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-zinc-500 mb-1">
-          <span>{totalWatched} / {totalEps || '?'} episodes watched</span>
+          <span>{totalWatched}{totalEps > 0 ? ` / ${totalEps}` : ''} episodes watched</span>
           {pct !== null && <span>{pct}%</span>}
         </div>
         <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
@@ -43,7 +43,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
       <div>
         <div className="flex justify-between text-xs text-zinc-400 mb-1">
           <span>Overall</span>
-          <span>{totalWatched} / {totalEps} episodes</span>
+          <span>{totalWatched}{totalEps > 0 ? ` / ${totalEps}` : ''} episodes</span>
         </div>
         <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
           <div
@@ -56,12 +56,12 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
       {seasons.map((s) => {
         const watched = watchedBySeason[s.season_number] ?? 0
         const pct = s.episode_count > 0 ? Math.min(100, Math.round((watched / s.episode_count) * 100)) : 0
-        const done = watched >= s.episode_count
+        const done = s.episode_count > 0 && watched >= s.episode_count
         return (
           <div key={s.season_number}>
             <div className="flex justify-between text-xs text-zinc-500 mb-0.5">
               <span>Season {s.season_number}</span>
-              <span>{watched} / {s.episode_count}</span>
+              <span>{watched}{s.episode_count > 0 ? ` / ${s.episode_count}` : ''}</span>
             </div>
             <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
               <div

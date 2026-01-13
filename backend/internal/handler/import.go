@@ -132,18 +132,17 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 
 		// Build the same seasons structure that AddAnimeSeason produces so
 		// TVSeasonProgress and AnimeSeasonManager behave identically.
+		// episode_count is 0 for ongoing anime (MAL exports series_episodes=0 when unknown)
 		metadata := map[string]any{
 			"mal_id":   a.ID,
 			"episodes": a.Episodes,
-		}
-		if a.Episodes > 0 {
-			metadata["seasons"] = []map[string]any{
+			"seasons": []map[string]any{
 				{
 					"season_number": 1,
 					"episode_count": a.Episodes,
 					"mal_id":        a.ID,
 				},
-			}
+			},
 		}
 
 		in := repository.CreateMediaInput{
