@@ -39,6 +39,53 @@ type tmdbTVData struct {
 	Seasons       []map[string]any
 }
 
+// fetchJikanAiredCount returns the exact number of episodes aired so far by
+// hitting the paginated episodes endpoint. It makes at most two requests.
+func (h *MediaHandler) fetchJikanAiredCount(ctx context.Context, malID string) int {
+	u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s/episodes?page=1", malID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return 0
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return 0
+	}
+	defer resp.Body.Close()
+	var p1 struct {
+		Pagination struct {
+			LastVisiblePage int  `json:"last_visible_page"`
+			HasNextPage     bool `json:"has_next_page"`
+		} `json:"pagination"`
+		Data []struct{} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&p1); err != nil {
+		return 0
+	}
+	if !p1.Pagination.HasNextPage {
+		return len(p1.Data)
+	}
+	// Fetch the last page to count items on it
+	lastPage := p1.Pagination.LastVisiblePage
+	u2 := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s/episodes?page=%d", malID, lastPage)
+	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, u2, nil)
+	if err != nil {
+		return 0
+	}
+	resp2, err := h.client.Do(req2)
+	if err != nil || resp2.StatusCode != http.StatusOK {
+		return 0
+	}
+	defer resp2.Body.Close()
+	var pLast struct {
+		Data []struct{} `json:"data"`
+	}
+	if err := json.NewDecoder(resp2.Body).Decode(&pLast); err != nil {
+		return 0
+	}
+	return (lastPage-1)*100 + len(pLast.Data)
+}
+
 func (h *MediaHandler) fetchJikanData(ctx context.Context, malID string) *tmdbTVData {
 	u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s", malID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -271,7 +318,23 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	if len(tvData.Seasons) > 0 {
 		meta["seasons"] = tvData.Seasons
 	}
-	// TotalProgress is nil for ongoing anime with unknown episode count — don't overwrite
+	// For ongoing anime (TotalEpisodes == nil), fetch the current aired count and
+	// use it to populate total_progress and the season's episode_count so that
+	// the progress bar and + button reflect reality after refresh.
+	if item.MediaType == models.MediaTypeAnime && tvData.TotalEpisodes == nil {
+		malID := strings.TrimPrefix(*item.ExternalID, "mal:")
+		if n := h.fetchJikanAiredCount(r.Context(), malID); n > 0 {
+			tvData.TotalEpisodes = &n
+			// Update any seasons that had an unknown count (0)
+			if sArr, ok := meta["seasons"].([]map[string]any); ok {
+				for _, s := range sArr {
+					if ec, ok := s["episode_count"].(int); ok && ec == 0 {
+						s["episode_count"] = n
+					}
+				}
+			}
+		}
+	}
 	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
 		TotalProgress: tvData.TotalEpisodes,
 		Metadata:      meta,
