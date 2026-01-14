@@ -195,7 +195,10 @@ export default function MediaDetail() {
               {refreshing ? 'Updating…' : onCooldown ? `Refresh available in ${Math.ceil(cooldownRemaining / 60000)}m` : 'Refresh episode count from TMDB'}
             </button>
           )}
-          {item.media_type === 'anime' && item.external_id?.startsWith('mal:') && (
+          {item.media_type === 'anime' && item.external_id?.startsWith('mal:') && (() => {
+            const s = (item.metadata?.seasons as { episode_count: number }[] | undefined) ?? []
+            return s.length === 1 && s[0]?.episode_count === 0
+          })() && (
             <button
               onClick={handleRefresh}
               disabled={refreshing || onCooldown}

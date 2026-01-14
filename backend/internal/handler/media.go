@@ -39,38 +39,49 @@ type tmdbTVData struct {
 	Seasons       []map[string]any
 }
 
-// fetchJikanAiredCount returns the number of episodes aired so far.
-// Jikan's pagination metadata (last_visible_page, has_next_page) is unreliable
-// for long-running series like One Piece — it always reports page 1 as the last
-// page even when there are 1000+ episodes. We probe pages sequentially and stop
-// when a page returns fewer than 100 items (indicating it is the last page).
-func (h *MediaHandler) fetchJikanAiredCount(ctx context.Context, malID string) int {
-	total := 0
-	for page := 1; page <= 100; page++ {
-		u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s/episodes?page=%d", malID, page)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			break
-		}
-		resp, err := h.client.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			if resp != nil {
-				resp.Body.Close()
-			}
-			break
-		}
-		var p struct {
-			Data []struct{} `json:"data"`
-		}
-		json.NewDecoder(resp.Body).Decode(&p) //nolint:errcheck
-		resp.Body.Close()
-		count := len(p.Data)
-		total += count
-		if count < 100 {
-			break
-		}
+// fetchAiredCount returns the number of episodes aired so far using the AniList
+// GraphQL API (free, no auth). A single request is enough: for airing anime,
+// nextAiringEpisode.episode is the NEXT episode, so latest aired = that - 1.
+// AniList accepts MAL IDs via the idMal field.
+func (h *MediaHandler) fetchAiredCount(ctx context.Context, malID string) int {
+	body := fmt.Sprintf(
+		`{"query":"query($id:Int){Media(idMal:$id,type:ANIME){episodes nextAiringEpisode{episode}}}","variables":{"id":%s}}`,
+		malID,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(body))
+	if err != nil {
+		return 0
 	}
-	return total
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return 0
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Data struct {
+			Media struct {
+				Episodes          *int `json:"episodes"`
+				NextAiringEpisode *struct {
+					Episode int `json:"episode"`
+				} `json:"nextAiringEpisode"`
+			} `json:"Media"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0
+	}
+	m := result.Data.Media
+	if m.NextAiringEpisode != nil {
+		return m.NextAiringEpisode.Episode - 1
+	}
+	if m.Episodes != nil {
+		return *m.Episodes
+	}
+	return 0
 }
 
 func (h *MediaHandler) fetchJikanData(ctx context.Context, malID string) *tmdbTVData {
@@ -310,7 +321,7 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	// at 0 so the UI keeps treating this as ongoing (∞ display, + always enabled).
 	if item.MediaType == models.MediaTypeAnime && tvData.TotalEpisodes == nil {
 		malID := strings.TrimPrefix(*item.ExternalID, "mal:")
-		if n := h.fetchJikanAiredCount(r.Context(), malID); n > 0 {
+		if n := h.fetchAiredCount(r.Context(), malID); n > 0 {
 			tvData.TotalEpisodes = &n
 		}
 	}
