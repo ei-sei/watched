@@ -19,7 +19,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
   const totalEps = item.total_progress ?? seasons.reduce((a, s) => a + s.episode_count, 0)
 
   const ongoingSingle = seasons.length === 1 && seasons[0].episode_count === 0
-  const unknownLabel = item.media_type === 'anime' ? unknownLabel : '?'
+  const unknownLabel = item.media_type === 'anime' ? '∞' : '?'
 
   if (seasons.length === 0 || ongoingSingle) {
     const pct = totalEps > 0 ? Math.min(100, Math.round((totalWatched / totalEps) * 100)) : null
