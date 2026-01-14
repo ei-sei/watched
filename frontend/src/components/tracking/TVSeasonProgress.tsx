@@ -19,13 +19,14 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
   const totalEps = item.total_progress ?? seasons.reduce((a, s) => a + s.episode_count, 0)
 
   const ongoingSingle = seasons.length === 1 && seasons[0].episode_count === 0
+  const unknownLabel = item.media_type === 'anime' ? unknownLabel : '?'
 
   if (seasons.length === 0 || ongoingSingle) {
     const pct = totalEps > 0 ? Math.min(100, Math.round((totalWatched / totalEps) * 100)) : null
     return (
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-zinc-500 mb-1">
-          <span>{totalWatched} / {totalEps > 0 ? totalEps : '∞'} episodes watched</span>
+          <span>{totalWatched} / {totalEps > 0 ? totalEps : unknownLabel} episodes watched</span>
           {pct !== null && <span>{pct}%</span>}
         </div>
         <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
@@ -45,7 +46,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
       <div>
         <div className="flex justify-between text-xs text-zinc-400 mb-1">
           <span>Overall</span>
-          <span>{totalWatched} / {totalEps > 0 ? totalEps : '∞'} episodes</span>
+          <span>{totalWatched} / {totalEps > 0 ? totalEps : unknownLabel} episodes</span>
         </div>
         <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
           <div
@@ -63,7 +64,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
           <div key={s.season_number}>
             <div className="flex justify-between text-xs text-zinc-500 mb-0.5">
               <span>Season {s.season_number}</span>
-              <span>{watched} / {s.episode_count > 0 ? s.episode_count : '∞'}</span>
+              <span>{watched} / {s.episode_count > 0 ? s.episode_count : unknownLabel}</span>
             </div>
             <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
               <div
