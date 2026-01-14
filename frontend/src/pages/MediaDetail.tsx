@@ -6,7 +6,6 @@ import { db } from '@/offline/db'
 import { useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
 import { syncItemDetail } from '@/offline/sync'
 import EpisodeTracker from '@/components/tracking/EpisodeTracker'
-import AnimeSeasonManager from '@/components/tracking/AnimeSeasonManager'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
 import ProgressTracker from '@/components/tracking/ProgressTracker'
 import TVSeasonProgress from '@/components/tracking/TVSeasonProgress'
@@ -209,11 +208,6 @@ export default function MediaDetail() {
         </div>
       )}
       {(item.media_type === 'tv_show' || item.media_type === 'anime') && <EpisodeTracker item={item} />}
-      {item.media_type === 'anime' && (() => {
-        const s = (item.metadata?.seasons as { episode_count: number }[] | undefined) ?? []
-        const ongoingSingle = s.length === 1 && s[0].episode_count === 0
-        return !ongoingSingle && <AnimeSeasonManager item={item} />
-      })()}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
     </div>
   )
