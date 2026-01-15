@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
@@ -23,6 +23,25 @@ import PublicProfile from '@/pages/PublicProfile'
 
 import type { User } from '@/types/auth'
 
+// ── PWA auto-update ───────────────────────────────────────────────────────────
+// When a new service worker takes over (skipWaiting + clientsClaim already set
+// in vite.config.ts), reload so the new bundle is served from cache.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload()
+  })
+}
+
+// ── User cache (survives network blips on app load) ───────────────────────────
+const USER_CACHE_KEY = 'watched_user_cache'
+function getCachedUser(): User | null {
+  try { return JSON.parse(localStorage.getItem(USER_CACHE_KEY) ?? 'null') } catch { return null }
+}
+function setCachedUser(u: User | null) {
+  if (u) localStorage.setItem(USER_CACHE_KEY, JSON.stringify(u))
+  else localStorage.removeItem(USER_CACHE_KEY)
+}
+
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
 })
@@ -31,27 +50,50 @@ const qc = new QueryClient({
 registerSyncOnReconnect()
 
 function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  // Seed from cache so ProtectedRoute never flashes /login on a valid session
+  const [user, setUser] = useState<User | null>(getCachedUser)
   const [isLoading, setIsLoading] = useState(true)
+  // Track whether we've already resolved the initial me() call
+  const initialised = useRef(false)
+
+  const hydrateUser = async () => {
+    try {
+      const { data: me } = await authApi.me()
+      setUser(me)
+      setCachedUser(me)
+      if (!initialised.current) syncMedia().catch(console.error)
+    } catch (err: any) {
+      const status = err?.response?.status
+      // Only clear the session on definitive auth failures, not network errors
+      if (status === 401 || status === 403) {
+        setUser(null)
+        setCachedUser(null)
+      }
+      // Otherwise keep the cached user — device may be momentarily offline
+    } finally {
+      initialised.current = true
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
+    // Safety: if the server is unreachable, don't spin forever
     const timeout = setTimeout(() => setIsLoading(false), 5000)
-    authApi.me()
-      .then((r) => {
-        setUser(r.data)
-        // Kick off background sync as soon as we know the user is authenticated
-        syncMedia().catch(console.error)
-      })
-      .catch(() => setUser(null))
-      .finally(() => { clearTimeout(timeout); setIsLoading(false) })
-  }, [])
+    hydrateUser().finally(() => clearTimeout(timeout))
+
+    // Proactively re-validate the session whenever the tab regains focus
+    // (covers the "idle for a long time" case)
+    const onFocus = () => { if (initialised.current) hydrateUser() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const login = async (username: string, password: string) => {
     const { data } = await authApi.login({ username, password })
     await storage.set('access_token', data.access_token)
     const { data: me } = await authApi.me()
     setUser(me)
-    // Sync after login so library is available immediately
+    setCachedUser(me)
     syncMedia().catch(console.error)
   }
 
@@ -59,6 +101,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
     await authApi.logout().catch(() => {})
     await storage.remove('access_token')
     setUser(null)
+    setCachedUser(null)
     qc.clear()
   }
 
