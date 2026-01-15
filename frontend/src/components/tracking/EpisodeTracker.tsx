@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLocalEpisodes, useLogEpisode, useDeleteEpisode } from '@/hooks/useLocalEpisodes'
 import { formatDate } from '@/utils/formatters'
+import { mediaApi } from '@/api/media'
+import { syncItemDetail } from '@/offline/sync'
 import type { MediaItem, EpisodeLog } from '@/types/media'
 
 interface Season {
@@ -9,6 +11,117 @@ interface Season {
 }
 
 interface Props { item: MediaItem }
+
+function SeasonRow({ item, s, episodes, log, remove, seasons }: {
+  item: MediaItem
+  s: Season
+  episodes: EpisodeLog[]
+  log: ReturnType<typeof useLogEpisode>
+  remove: ReturnType<typeof useDeleteEpisode>
+  seasons: Season[]
+}) {
+  const watched = episodes
+    .filter((e) => e.season_number === s.season_number)
+    .sort((a, b) => b.episode_number - a.episode_number)
+  const watchedCount = watched.length
+  const maxEp = watched[0]?.episode_number ?? 0
+  const ongoing = s.episode_count === 0
+  const ongoingSingle = ongoing && seasons.length === 1
+  const canAdd = ongoing || watchedCount < s.episode_count
+  const canRemove = watchedCount > 0
+  const isComplete = !ongoing && watchedCount === s.episode_count
+
+  const [inputVal, setInputVal] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const commitProgress = async (raw: string) => {
+    const n = parseInt(raw, 10)
+    setInputVal(null)
+    if (isNaN(n) || n < 0 || n === watchedCount) return
+    setSaving(true)
+    try {
+      await mediaApi.setSeasonProgress(item.id, s.season_number, n)
+      await syncItemDetail(item.id)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const withDates = watched.filter((e) => e.watched_at)
+  const earliestEp = withDates.reduce<EpisodeLog | null>(
+    (min, e) => (!min || e.watched_at! < min.watched_at!) ? e : min, null
+  )
+  const latestEp = withDates.reduce<EpisodeLog | null>(
+    (max, e) => (!max || e.watched_at! > max.watched_at!) ? e : max, null
+  )
+  const isSingleSeason = seasons.length === 1
+  const startLabel = earliestEp
+    ? formatDate(earliestEp.watched_at)
+    : (isSingleSeason && item.started_at ? formatDate(item.started_at) : null)
+  const endLabel = isComplete
+    ? (latestEp
+        ? formatDate(latestEp.watched_at)
+        : (isSingleSeason && item.completed_at ? formatDate(item.completed_at) : null))
+    : null
+
+  const totalLabel = ongoing ? (item.media_type === 'anime' ? '∞' : '?') : String(s.episode_count)
+
+  return (
+    <div key={s.season_number} className="flex items-center gap-2 sm:gap-3 py-1 flex-wrap">
+      {!ongoingSingle && (
+        <span className="text-sm text-zinc-400 w-16 sm:w-20 flex-shrink-0">S{s.season_number < 10 ? '0' + s.season_number : s.season_number}</span>
+      )}
+      <div className="flex items-center gap-2 bg-[#1a1a1a] rounded-md border border-white/[0.08] px-1">
+        <button
+          onClick={() => watched[0] && remove.mutate(watched[0].id)}
+          disabled={!canRemove || remove.isPending || saving}
+          className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
+        >−</button>
+        <div className="flex items-center gap-1 text-sm text-zinc-300 w-20 justify-center tabular-nums">
+          {inputVal !== null ? (
+            <input
+              ref={inputRef}
+              type="number"
+              min={0}
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              onBlur={(e) => commitProgress(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') inputRef.current?.blur()
+                if (e.key === 'Escape') setInputVal(null)
+              }}
+              className="w-14 bg-transparent text-center text-zinc-100 focus:outline-none focus:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              autoFocus
+            />
+          ) : (
+            <button
+              onClick={() => setInputVal(String(watchedCount))}
+              disabled={saving}
+              className="hover:text-white transition-colors disabled:opacity-50"
+              title="Click to set episode count"
+            >
+              {saving ? '…' : watchedCount}
+            </button>
+          )}
+          <span className="text-zinc-600">/ {totalLabel}</span>
+        </div>
+        <button
+          onClick={() => log.mutate({ season: s.season_number, episode: maxEp + 1 })}
+          disabled={!canAdd || log.isPending || saving}
+          className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
+        >+</button>
+      </div>
+      {(startLabel || endLabel) && (
+        <span className="text-xs text-zinc-600">
+          {startLabel && endLabel
+            ? `${startLabel} → ${endLabel}`
+            : startLabel ?? endLabel}
+        </span>
+      )}
+    </div>
+  )
+}
 
 export default function EpisodeTracker({ item }: Props) {
   const seasons = (item.metadata?.seasons as Season[] | undefined) ?? []
@@ -20,67 +133,9 @@ export default function EpisodeTracker({ item }: Props) {
     return (
       <div className="space-y-1">
         <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3">Episodes</h3>
-        {seasons.map((s) => {
-          const watched = episodes
-            .filter((e) => e.season_number === s.season_number)
-            .sort((a, b) => b.episode_number - a.episode_number)
-          const watchedCount = watched.length
-          const maxEp = watched[0]?.episode_number ?? 0
-          const ongoing = s.episode_count === 0
-          const ongoingSingle = ongoing && seasons.length === 1
-          const canAdd = ongoing || watchedCount < s.episode_count
-          const canRemove = watchedCount > 0
-          const isComplete = !ongoing && watchedCount === s.episode_count
-
-          // Derive per-season dates from episode logs so each season is independent.
-          // For single-season items, fall back to item-level started_at/completed_at.
-          const withDates = watched.filter((e) => e.watched_at)
-          const earliestEp = withDates.reduce<EpisodeLog | null>(
-            (min, e) => (!min || e.watched_at! < min.watched_at!) ? e : min, null
-          )
-          const latestEp = withDates.reduce<EpisodeLog | null>(
-            (max, e) => (!max || e.watched_at! > max.watched_at!) ? e : max, null
-          )
-          const isSingleSeason = seasons.length === 1
-          const startLabel = earliestEp
-            ? formatDate(earliestEp.watched_at)
-            : (isSingleSeason && item.started_at ? formatDate(item.started_at) : null)
-          const endLabel = isComplete
-            ? (latestEp
-                ? formatDate(latestEp.watched_at)
-                : (isSingleSeason && item.completed_at ? formatDate(item.completed_at) : null))
-            : null
-
-          return (
-            <div key={s.season_number} className="flex items-center gap-2 sm:gap-3 py-1 flex-wrap">
-              {!ongoingSingle && (
-                <span className="text-sm text-zinc-400 w-16 sm:w-20 flex-shrink-0">S{s.season_number < 10 ? '0' + s.season_number : s.season_number}</span>
-              )}
-              <div className="flex items-center gap-2 bg-[#1a1a1a] rounded-md border border-white/[0.08] px-1">
-                <button
-                  onClick={() => watched[0] && remove.mutate(watched[0].id)}
-                  disabled={!canRemove || remove.isPending}
-                  className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
-                >−</button>
-                <span className="text-sm text-zinc-300 w-20 text-center tabular-nums">
-                  {watchedCount} / {ongoing ? (item.media_type === 'anime' ? '∞' : '?') : s.episode_count}
-                </span>
-                <button
-                  onClick={() => log.mutate({ season: s.season_number, episode: maxEp + 1 })}
-                  disabled={!canAdd || log.isPending}
-                  className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
-                >+</button>
-              </div>
-              {(startLabel || endLabel) && (
-                <span className="text-xs text-zinc-600">
-                  {startLabel && endLabel
-                    ? `${startLabel} → ${endLabel}`
-                    : startLabel ?? endLabel}
-                </span>
-              )}
-            </div>
-          )
-        })}
+        {seasons.map((s) => (
+          <SeasonRow key={s.season_number} item={item} s={s} episodes={episodes} log={log} remove={remove} seasons={seasons} />
+        ))}
       </div>
     )
   }

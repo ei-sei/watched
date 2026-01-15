@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ei-sei/brsti/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -87,6 +88,44 @@ func (r *EpisodeRepo) Delete(ctx context.Context, id, mediaItemID int) error {
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+// SetSeasonProgress sets the watched episode count for a season to exactly `count`.
+// Episodes 1..count are inserted (skipping existing), and any above count are deleted.
+func (r *EpisodeRepo) SetSeasonProgress(ctx context.Context, mediaItemID, season, count int) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Delete episodes above the new count
+	if _, err = tx.Exec(ctx,
+		`DELETE FROM tv_episode_logs
+		 WHERE media_item_id = $1 AND season_number = $2 AND episode_number > $3`,
+		mediaItemID, season, count,
+	); err != nil {
+		return fmt.Errorf("delete above: %w", err)
+	}
+
+	// Insert episodes 1..count (skip existing)
+	if count > 0 {
+		episodes := make([]int, count)
+		for i := range episodes {
+			episodes[i] = i + 1
+		}
+		if _, err = tx.Exec(ctx,
+			`INSERT INTO tv_episode_logs (media_item_id, season_number, episode_number, watched_at)
+			 SELECT $1, $2, ep, NOW()
+			 FROM unnest($3::int[]) AS ep
+			 ON CONFLICT (media_item_id, season_number, episode_number) DO NOTHING`,
+			mediaItemID, season, episodes,
+		); err != nil {
+			return fmt.Errorf("bulk insert: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *EpisodeRepo) CountWatched(ctx context.Context, mediaItemID int) (int, error) {

@@ -472,6 +472,43 @@ func (h *MediaHandler) UpsertEpisode(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, log)
 }
 
+// PUT /media/{id}/episodes/progress
+func (h *MediaHandler) SetSeasonProgress(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var body struct {
+		Season int `json:"season" validate:"required,min=1"`
+		Count  int `json:"count"  validate:"min=0"`
+	}
+	if err := decode(r, &body); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if err := h.validate.Struct(body); err != nil {
+		jsonErr(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	item, err := h.media.GetByID(r.Context(), id, userIDFrom(r))
+	if err != nil || item == nil {
+		jsonErr(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	if err := h.episodes.SetSeasonProgress(r.Context(), id, body.Season, body.Count); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	h.autoUpdateEpisodeStatus(r.Context(), item, userIDFrom(r))
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // DELETE /media/{id}/episodes/{epID}
 func (h *MediaHandler) DeleteEpisode(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
