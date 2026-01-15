@@ -86,7 +86,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
     const onFocus = () => { if (initialised.current) hydrateUser() }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const login = async (username: string, password: string) => {
     const { data } = await authApi.login({ username, password })
