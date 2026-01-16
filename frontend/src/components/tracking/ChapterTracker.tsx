@@ -40,28 +40,12 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
   const [titleDraft, setTitleDraft] = useState(ch.chapter_title ?? '')
   const [editingTitle, setEditingTitle] = useState(!ch.chapter_title)
 
-  const saveNote = useMutation({
-    mutationFn: (note: string) => upsert.mutateAsync({
-      chapter_number: ch.chapter_number,
-      chapter_title: ch.chapter_title ?? undefined,
-      start_page: ch.start_page ?? undefined,
-      end_page: ch.end_page ?? undefined,
-      status: ch.status,
-      note,
-    }),
-    onSuccess: () => setEditing(false),
-  })
-
-  const saveTitle = useMutation({
-    mutationFn: (chapter_title: string) => upsert.mutateAsync({
-      chapter_number: ch.chapter_number,
-      chapter_title,
-      start_page: ch.start_page ?? undefined,
-      end_page: ch.end_page ?? undefined,
-      status: ch.status,
-      note: ch.note ?? undefined,
-    }),
-  })
+  const base = {
+    chapter_number: ch.chapter_number,
+    start_page: ch.start_page ?? undefined,
+    end_page: ch.end_page ?? undefined,
+    status: ch.status,
+  }
 
   const pageRange = ch.start_page && ch.end_page
     ? `pp. ${ch.start_page}–${ch.end_page}`
@@ -98,7 +82,7 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
                 autoFocus
                 onChange={(e) => setTitleDraft(e.target.value)}
                 onBlur={() => {
-                  if (titleDraft !== (ch.chapter_title ?? '')) saveTitle.mutate(titleDraft)
+                  if (titleDraft !== (ch.chapter_title ?? '')) upsert.mutate({ ...base, chapter_title: titleDraft, note: ch.note ?? undefined })
                   if (titleDraft) setEditingTitle(false)
                 }}
                 onKeyDown={(e) => {
@@ -141,11 +125,11 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
                 />
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => saveNote.mutate(draft)}
-                    disabled={saveNote.isPending}
+                    onClick={() => upsert.mutate({ ...base, chapter_title: ch.chapter_title ?? undefined, note: draft }, { onSuccess: () => setEditing(false) })}
+                    disabled={upsert.isPending}
                     className="text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1 rounded-md transition-colors"
                   >
-                    {saveNote.isPending ? 'Saving…' : 'Save'}
+                    {upsert.isPending ? 'Saving…' : 'Save'}
                   </button>
                   {editing && (
                     <button

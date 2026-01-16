@@ -18,12 +18,16 @@ func NewChapterRepo(db *pgxpool.Pool) *ChapterRepo { return &ChapterRepo{db: db}
 const chapterColumns = `id, media_item_id, chapter_number, chapter_title,
 	start_page, end_page, status, note, started_at, completed_at`
 
-func scanChapter(row pgx.Row) (*models.BookChapterLog, error) {
-	c := &models.BookChapterLog{}
-	err := row.Scan(
+func scanChapterFields(c *models.BookChapterLog, scan func(...any) error) error {
+	return scan(
 		&c.ID, &c.MediaItemID, &c.ChapterNumber, &c.ChapterTitle,
 		&c.StartPage, &c.EndPage, &c.Status, &c.Note, &c.StartedAt, &c.CompletedAt,
 	)
+}
+
+func scanChapter(row pgx.Row) (*models.BookChapterLog, error) {
+	c := &models.BookChapterLog{}
+	err := scanChapterFields(c, row.Scan)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -42,10 +46,7 @@ func (r *ChapterRepo) List(ctx context.Context, mediaItemID int) ([]models.BookC
 	var logs []models.BookChapterLog
 	for rows.Next() {
 		var c models.BookChapterLog
-		if err := rows.Scan(
-			&c.ID, &c.MediaItemID, &c.ChapterNumber, &c.ChapterTitle,
-			&c.StartPage, &c.EndPage, &c.Status, &c.Note, &c.StartedAt, &c.CompletedAt,
-		); err != nil {
+		if err := scanChapterFields(&c, rows.Scan); err != nil {
 			return nil, err
 		}
 		logs = append(logs, c)

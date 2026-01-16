@@ -51,22 +51,8 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFrom(r.Context())
-
-	if body.IsPublic != nil {
-		user, err := h.users.UpdatePublic(r.Context(), claims.UserID, *body.IsPublic)
-		if err != nil || user == nil {
-			jsonErr(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		// If only toggling public, return early
-		if body.DisplayName == nil && body.AvatarURL == nil {
-			jsonOK(w, user)
-			return
-		}
-	}
-
-	user, err := h.users.UpdateProfile(r.Context(), claims.UserID, body.DisplayName, body.AvatarURL)
-	if err != nil {
+	user, err := h.users.UpdateMe(r.Context(), claims.UserID, body.DisplayName, body.AvatarURL, body.IsPublic)
+	if err != nil || user == nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}

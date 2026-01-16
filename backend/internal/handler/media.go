@@ -155,6 +155,20 @@ func userIDFrom(r *http.Request) int {
 	return auth.ClaimsFrom(r.Context()).UserID
 }
 
+// parseMalID extracts the numeric ID from a "mal:12345" external ID.
+// Returns ("", false) if the value is not a MAL id.
+func parseMalID(externalID string) (string, bool) {
+	id := strings.TrimPrefix(externalID, "mal:")
+	return id, id != externalID
+}
+
+// parseTMDBID extracts the numeric ID from a "tmdb:12345" external ID.
+// Returns ("", false) if the value is not a TMDB id.
+func parseTMDBID(externalID string) (string, bool) {
+	id := strings.TrimPrefix(externalID, "tmdb:")
+	return id, id != externalID
+}
+
 // GET /media
 func (h *MediaHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -214,11 +228,11 @@ func (h *MediaHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if body.ExternalID != nil {
 		var externalData *tmdbTVData
 		if body.MediaType == models.MediaTypeTVShow {
-			if tmdbID := strings.TrimPrefix(*body.ExternalID, "tmdb:"); tmdbID != *body.ExternalID {
+			if tmdbID, ok := parseTMDBID(*body.ExternalID); ok {
 				externalData = h.fetchTMDBData(r.Context(), tmdbID)
 			}
 		} else if body.MediaType == models.MediaTypeAnime {
-			if malID := strings.TrimPrefix(*body.ExternalID, "mal:"); malID != *body.ExternalID {
+			if malID, ok := parseMalID(*body.ExternalID); ok {
 				externalData = h.fetchJikanData(r.Context(), malID)
 			}
 		}
@@ -287,15 +301,15 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	}
 	var tvData *tmdbTVData
 	if item.MediaType == models.MediaTypeTVShow {
-		tmdbID := strings.TrimPrefix(*item.ExternalID, "tmdb:")
-		if tmdbID == *item.ExternalID {
+		tmdbID, ok := parseTMDBID(*item.ExternalID)
+		if !ok {
 			jsonErr(w, http.StatusBadRequest, "not a TMDB item")
 			return
 		}
 		tvData = h.fetchTMDBData(r.Context(), tmdbID)
 	} else if item.MediaType == models.MediaTypeAnime {
-		malID := strings.TrimPrefix(*item.ExternalID, "mal:")
-		if malID == *item.ExternalID {
+		malID, ok := parseMalID(*item.ExternalID)
+		if !ok {
 			jsonErr(w, http.StatusBadRequest, "not a MAL item")
 			return
 		}
@@ -320,9 +334,10 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	// store it in total_progress only. episode_count in the season metadata stays
 	// at 0 so the UI keeps treating this as ongoing (∞ display, + always enabled).
 	if item.MediaType == models.MediaTypeAnime && tvData.TotalEpisodes == nil {
-		malID := strings.TrimPrefix(*item.ExternalID, "mal:")
-		if n := h.fetchAiredCount(r.Context(), malID); n > 0 {
-			tvData.TotalEpisodes = &n
+		if malID, ok := parseMalID(*item.ExternalID); ok {
+			if n := h.fetchAiredCount(r.Context(), malID); n > 0 {
+				tvData.TotalEpisodes = &n
+			}
 		}
 	}
 	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{

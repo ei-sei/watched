@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { db } from '@/offline/db'
 import { enqueue } from '@/offline/queue'
 import { chaptersApi } from '@/api/chapters'
-import { mediaApi } from '@/api/media'
+import { scheduleItemRefetch } from '@/offline/sync'
 import type { ChapterLog } from '@/types/media'
 
 export function useLocalChapters(mediaId: number) {
@@ -51,9 +51,7 @@ export function useUpsertChapter(mediaId: number) {
         const { data: ch } = await chaptersApi.upsert(mediaId, data)
         if (optimistic.id < 0) await db.chapterLogs.delete(optimistic.id)
         await db.chapterLogs.put(ch)
-        // Sync the media item from server — backend may have auto-transitioned status
-        const { data: updatedItem } = await mediaApi.get(mediaId)
-        await db.mediaItems.put(updatedItem)
+        scheduleItemRefetch(mediaId)
         return ch
       } catch {
         await enqueue({
@@ -80,9 +78,7 @@ export function useDeleteChapter(mediaId: number) {
 
       try {
         await chaptersApi.delete(mediaId, chId)
-        // Sync the media item from server — backend may have auto-transitioned status
-        const { data: updatedItem } = await mediaApi.get(mediaId)
-        await db.mediaItems.put(updatedItem)
+        scheduleItemRefetch(mediaId)
       } catch {
         if (chId > 0) {
           await enqueue({

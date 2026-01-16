@@ -20,13 +20,17 @@ const mediaColumns = `id, user_id, media_type, external_id, title, year, poster_
 	metadata, status, rating, review_text, started_at, completed_at,
 	current_progress, total_progress, created_at, updated_at`
 
-func scanMedia(row pgx.Row) (*models.MediaItem, error) {
-	m := &models.MediaItem{}
-	err := row.Scan(
+func scanMediaFields(m *models.MediaItem, scan func(...any) error) error {
+	return scan(
 		&m.ID, &m.UserID, &m.MediaType, &m.ExternalID, &m.Title, &m.Year, &m.PosterURL,
 		&m.Metadata, &m.Status, &m.Rating, &m.ReviewText, &m.StartedAt, &m.CompletedAt,
 		&m.CurrentProgress, &m.TotalProgress, &m.CreatedAt, &m.UpdatedAt,
 	)
+}
+
+func scanMedia(row pgx.Row) (*models.MediaItem, error) {
+	m := &models.MediaItem{}
+	err := scanMediaFields(m, row.Scan)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -125,11 +129,7 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 	items := make([]models.MediaItem, 0)
 	for rows.Next() {
 		m := models.MediaItem{}
-		if err := rows.Scan(
-			&m.ID, &m.UserID, &m.MediaType, &m.ExternalID, &m.Title, &m.Year, &m.PosterURL,
-			&m.Metadata, &m.Status, &m.Rating, &m.ReviewText, &m.StartedAt, &m.CompletedAt,
-			&m.CurrentProgress, &m.TotalProgress, &m.CreatedAt, &m.UpdatedAt,
-		); err != nil {
+		if err := scanMediaFields(&m, rows.Scan); err != nil {
 			return nil, err
 		}
 		items = append(items, m)
@@ -314,33 +314,49 @@ type StatusCount struct {
 	Count  int
 }
 
-func (r *MediaRepo) CountByStatus(ctx context.Context, userID int, mt models.MediaType) ([]StatusCount, error) {
-	rows, err := r.db.Query(ctx,
-		`SELECT status, COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = $2 GROUP BY status`,
-		userID, mt)
+type TypeStats struct {
+	Counts    []StatusCount
+	AvgRating *float64
+}
+
+// AllTypeStats returns status counts and average rating for every media type in
+// a single query instead of one query per type per metric.
+func (r *MediaRepo) AllTypeStats(ctx context.Context, userID int) (map[models.MediaType]TypeStats, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH counts AS (
+			SELECT media_type, status, COUNT(*) AS cnt
+			FROM media_items WHERE user_id = $1
+			GROUP BY media_type, status
+		),
+		avgs AS (
+			SELECT media_type, AVG(rating) AS avg_rating
+			FROM media_items WHERE user_id = $1 AND rating IS NOT NULL
+			GROUP BY media_type
+		)
+		SELECT c.media_type, c.status, c.cnt, a.avg_rating
+		FROM counts c
+		LEFT JOIN avgs a ON a.media_type = c.media_type
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []StatusCount
+	out := map[models.MediaType]TypeStats{}
 	for rows.Next() {
-		var sc StatusCount
-		if err := rows.Scan(&sc.Status, &sc.Count); err != nil {
+		var mt models.MediaType
+		var st models.MediaStatus
+		var count int
+		var avg *float64
+		if err := rows.Scan(&mt, &st, &count, &avg); err != nil {
 			return nil, err
 		}
-		out = append(out, sc)
+		ts := out[mt]
+		ts.Counts = append(ts.Counts, StatusCount{Status: st, Count: count})
+		ts.AvgRating = avg // same for every row of this type
+		out[mt] = ts
 	}
-	return out, nil
-}
-
-func (r *MediaRepo) AverageRating(ctx context.Context, userID int, mt models.MediaType) (*float64, error) {
-	var avg *float64
-	err := r.db.QueryRow(ctx,
-		`SELECT AVG(rating) FROM media_items WHERE user_id = $1 AND media_type = $2 AND rating IS NOT NULL`,
-		userID, mt,
-	).Scan(&avg)
-	return avg, err
+	return out, rows.Err()
 }
 
 type RatingBucket struct {

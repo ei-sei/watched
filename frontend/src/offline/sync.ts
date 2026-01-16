@@ -4,15 +4,17 @@ import { getPending, dequeue, incrementRetry } from './queue'
 import type { MediaItem, EpisodeLog, ChapterLog, PaginatedResponse } from '@/types/media'
 
 const MAX_RETRIES = 3
+const FLUSH_CONCURRENCY = 3
 
 // ── Queue flush ──────────────────────────────────────────────────────────────
 
 export async function flushQueue(): Promise<void> {
   const pending = await getPending()
-  for (const item of pending) {
+
+  const processOne = async (item: (typeof pending)[number]) => {
     if (item.retries >= MAX_RETRIES) {
       await dequeue(item.id!)
-      continue
+      return
     }
     try {
       await client.request({ method: item.method, url: item.url, data: item.data })
@@ -20,6 +22,11 @@ export async function flushQueue(): Promise<void> {
     } catch {
       await incrementRetry(item.id!)
     }
+  }
+
+  // Process in batches of FLUSH_CONCURRENCY instead of one-by-one
+  for (let i = 0; i < pending.length; i += FLUSH_CONCURRENCY) {
+    await Promise.all(pending.slice(i, i + FLUSH_CONCURRENCY).map(processOne))
   }
 }
 
@@ -86,6 +93,27 @@ export async function syncItemDetail(mediaId: number): Promise<void> {
   } catch {
     // Offline — local data is fine
   }
+}
+
+// ── Debounced item re-fetch (for status auto-transitions) ────────────────────
+// After logging/deleting an episode or chapter the backend may auto-transition
+// the item's status. We re-fetch the media item to pick up any change, but we
+// debounce per item so rapid toggles only trigger one request.
+
+const pendingRefetch = new Map<number, number>()
+
+export function scheduleItemRefetch(mediaId: number): void {
+  clearTimeout(pendingRefetch.get(mediaId))
+  const t = window.setTimeout(async () => {
+    pendingRefetch.delete(mediaId)
+    try {
+      const { data } = await client.get<MediaItem>(`/media/${mediaId}`)
+      await db.mediaItems.put(data)
+    } catch {
+      // offline or auth issue — local state is fine
+    }
+  }, 400)
+  pendingRefetch.set(mediaId, t)
 }
 
 // ── Reconnect handler ────────────────────────────────────────────────────────

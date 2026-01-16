@@ -163,23 +163,23 @@ function ManualEpisodeTracker({ episodes, log, remove }: {
       <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Episodes</h3>
       <div className="flex gap-2 items-end">
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Season</label>
+          <label className="block text-xs text-zinc-600 mb-1">Season</label>
           <input type="number" min={1} value={newSeason} onChange={(e) => setNewSeason(+e.target.value)}
-            className="w-20 bg-slate-700 text-white rounded px-2 py-1 text-sm" />
+            className="w-20 bg-[#1a1a1a] text-zinc-200 rounded px-2 py-1 text-sm border border-white/[0.08]" />
         </div>
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Episode</label>
+          <label className="block text-xs text-zinc-600 mb-1">Episode</label>
           <input type="number" min={1} value={newEpisode} onChange={(e) => setNewEpisode(+e.target.value)}
-            className="w-20 bg-slate-700 text-white rounded px-2 py-1 text-sm" />
+            className="w-20 bg-[#1a1a1a] text-zinc-200 rounded px-2 py-1 text-sm border border-white/[0.08]" />
         </div>
         <button onClick={() => log.mutate({ season: newSeason, episode: newEpisode })}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-sm">
+          className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-sm transition-colors">
           Log
         </button>
       </div>
       {Object.entries(byseason).sort(([a], [b]) => +a - +b).map(([season, eps]) => (
         <div key={season}>
-          <p className="text-sm font-medium text-slate-300 mb-2">Season {season}</p>
+          <p className="text-sm font-medium text-zinc-300 mb-2">Season {season}</p>
           <div className="flex flex-wrap gap-2">
             {eps.sort((a, b) => a.episode_number - b.episode_number).map((ep) => (
               <button key={ep.id} onClick={() => remove.mutate(ep.id)}

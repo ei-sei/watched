@@ -16,9 +16,13 @@ func NewEpisodeRepo(db *pgxpool.Pool) *EpisodeRepo { return &EpisodeRepo{db: db}
 
 const episodeColumns = `id, media_item_id, season_number, episode_number, watched_at, rating, note`
 
+func scanEpisodeFields(e *models.TvEpisodeLog, scan func(...any) error) error {
+	return scan(&e.ID, &e.MediaItemID, &e.SeasonNumber, &e.EpisodeNumber, &e.WatchedAt, &e.Rating, &e.Note)
+}
+
 func scanEpisode(row pgx.Row) (*models.TvEpisodeLog, error) {
 	e := &models.TvEpisodeLog{}
-	err := row.Scan(&e.ID, &e.MediaItemID, &e.SeasonNumber, &e.EpisodeNumber, &e.WatchedAt, &e.Rating, &e.Note)
+	err := scanEpisodeFields(e, row.Scan)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -37,7 +41,7 @@ func (r *EpisodeRepo) List(ctx context.Context, mediaItemID int) ([]models.TvEpi
 	var logs []models.TvEpisodeLog
 	for rows.Next() {
 		var e models.TvEpisodeLog
-		if err := rows.Scan(&e.ID, &e.MediaItemID, &e.SeasonNumber, &e.EpisodeNumber, &e.WatchedAt, &e.Rating, &e.Note); err != nil {
+		if err := scanEpisodeFields(&e, rows.Scan); err != nil {
 			return nil, err
 		}
 		logs = append(logs, e)

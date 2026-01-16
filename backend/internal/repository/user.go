@@ -17,10 +17,14 @@ func NewUserRepo(db *pgxpool.Pool) *UserRepo { return &UserRepo{db: db} }
 const userColumns = `id, username, email, password_hash, display_name, avatar_url,
 	is_admin, is_premium, is_public, failed_attempts, locked_until, created_at, updated_at`
 
+func scanUserFields(u *models.User, scan func(...any) error) error {
+	return scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL,
+		&u.IsAdmin, &u.IsPremium, &u.IsPublic, &u.FailedAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
+}
+
 func scanUser(row pgx.Row) (*models.User, error) {
 	u := &models.User{}
-	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL,
-		&u.IsAdmin, &u.IsPremium, &u.IsPublic, &u.FailedAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
+	err := scanUserFields(u, row.Scan)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -52,22 +56,16 @@ func (r *UserRepo) UpdateLoginFail(ctx context.Context, id, attempts int, locked
 	return err
 }
 
-func (r *UserRepo) UpdateProfile(ctx context.Context, id int, displayName, avatarURL *string) (*models.User, error) {
+func (r *UserRepo) UpdateMe(ctx context.Context, id int, displayName, avatarURL *string, isPublic *bool) (*models.User, error) {
 	return scanUser(r.db.QueryRow(ctx,
 		`UPDATE users SET
 		    display_name = COALESCE($2, display_name),
 		    avatar_url   = COALESCE($3, avatar_url),
+		    is_public    = COALESCE($4, is_public),
 		    updated_at   = NOW()
 		 WHERE id = $1
 		 RETURNING `+userColumns,
-		id, displayName, avatarURL))
-}
-
-func (r *UserRepo) UpdatePublic(ctx context.Context, id int, isPublic bool) (*models.User, error) {
-	return scanUser(r.db.QueryRow(ctx,
-		`UPDATE users SET is_public = $2, updated_at = NOW()
-		 WHERE id = $1 RETURNING `+userColumns,
-		id, isPublic))
+		id, displayName, avatarURL, isPublic))
 }
 
 func (r *UserRepo) UpdatePassword(ctx context.Context, id int, hash string) error {
@@ -97,8 +95,7 @@ func (r *UserRepo) List(ctx context.Context) ([]models.User, error) {
 	var users []models.User
 	for rows.Next() {
 		var u models.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL,
-			&u.IsAdmin, &u.IsPremium, &u.IsPublic, &u.FailedAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := scanUserFields(&u, rows.Scan); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
