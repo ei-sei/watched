@@ -249,6 +249,8 @@ export default function Admin() {
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-semibold text-white tracking-tight">Admin</h1>
 
+      {stats.isLoading && <p className="text-zinc-600 text-sm">Loading stats…</p>}
+      {stats.isError && <p className="text-red-400 text-sm">Failed to load stats — you may not have admin access yet. Try signing out and back in.</p>}
       {stats.data && <OverviewCard s={stats.data} />}
       {stats.data && <InfraCard s={stats.data} />}
       <ServicesCard services={health.data} loading={health.isLoading} />
@@ -287,6 +289,7 @@ export default function Admin() {
           </div>
 
           {invites.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
+          {invites.isError && <p className="text-red-400 text-sm">Failed to load invite codes.</p>}
           {invites.data && (
             <div className="space-y-1.5">
               {invites.data.length === 0 && (
@@ -329,6 +332,7 @@ export default function Admin() {
       {tab === 'users' && (
         <div className="space-y-1.5">
           {users.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
+          {users.isError && <p className="text-red-400 text-sm">Failed to load users.</p>}
           {users.data?.map((u) => (
             <div key={u.id} className="flex items-center gap-3 bg-[#1a1a1a] rounded-lg px-4 py-3 ring-1 ring-white/[0.06]">
               <div className="flex-1 min-w-0">

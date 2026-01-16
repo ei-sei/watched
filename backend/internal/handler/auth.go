@@ -140,7 +140,15 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := auth.NewAccessToken(h.cfg.JWTSecret, claims.UserID, claims.IsAdmin)
+	// Re-read IsAdmin from DB so flag changes take effect on the next refresh
+	// without requiring the user to log out.
+	user, err := h.users.GetByID(r.Context(), claims.UserID)
+	if err != nil || user == nil {
+		jsonErr(w, http.StatusUnauthorized, "user not found")
+		return
+	}
+
+	access, err := auth.NewAccessToken(h.cfg.JWTSecret, user.ID, user.IsAdmin)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
