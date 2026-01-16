@@ -24,11 +24,17 @@ import PublicProfile from '@/pages/PublicProfile'
 import type { User } from '@/types/auth'
 
 // ── PWA auto-update ───────────────────────────────────────────────────────────
-// When a new service worker takes over (skipWaiting + clientsClaim already set
-// in vite.config.ts), reload so the new bundle is served from cache.
+// When a new SW takes over, reload — but only when the tab is hidden so we
+// never interrupt active use. If the tab is currently visible, defer until
+// the user next switches away.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    window.location.reload()
+    const reload = () => { if (document.visibilityState === 'hidden') window.location.reload() }
+    if (document.visibilityState === 'hidden') {
+      window.location.reload()
+    } else {
+      document.addEventListener('visibilitychange', reload, { once: true })
+    }
   })
 }
 
@@ -64,12 +70,13 @@ function AuthProvider({ children }: { children: ReactNode }) {
       if (!initialised.current) syncMedia().catch(console.error)
     } catch (err: any) {
       const status = err?.response?.status
-      // Only clear the session on definitive auth failures, not network errors
+      // Only clear the session on definitive auth failures (401/403 on /auth/refresh,
+      // which the client interceptor already handles). A plain network error or
+      // server blip keeps the cached user intact.
       if (status === 401 || status === 403) {
         setUser(null)
         setCachedUser(null)
       }
-      // Otherwise keep the cached user — device may be momentarily offline
     } finally {
       initialised.current = true
       setIsLoading(false)
@@ -81,11 +88,12 @@ function AuthProvider({ children }: { children: ReactNode }) {
     const timeout = setTimeout(() => setIsLoading(false), 5000)
     hydrateUser().finally(() => clearTimeout(timeout))
 
-    // Proactively re-validate the session whenever the tab regains focus
-    // (covers the "idle for a long time" case)
-    const onFocus = () => { if (initialised.current) hydrateUser() }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    // Re-validate whenever the tab becomes visible again (covers long idle periods)
+    const onVisible = () => {
+      if (initialised.current && document.visibilityState === 'visible') hydrateUser()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
   const login = async (username: string, password: string) => {
