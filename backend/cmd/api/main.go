@@ -131,10 +131,15 @@ func main() {
 			})
 		})
 
-		// Search & Stats
+		// Search
 		r.Get("/search", searchH.Search)
-		r.Get("/stats", statsH.Get)
-		r.Get("/stats/summary", statsH.Summary)
+
+		// Stats — premium only (admins pass through)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequirePremium)
+			r.Get("/stats", statsH.Get)
+			r.Get("/stats/summary", statsH.Summary)
+		})
 
 		// Import
 		r.Post("/import/mal", importH.ImportMAL)

@@ -1,5 +1,7 @@
 import { useStats } from '@/hooks/useStats'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { useAuth } from '@/hooks/useAuth'
+import { BarChart2, Lock } from 'lucide-react'
 
 function formatTime(minutes: number): string {
   if (minutes < 60) return `${minutes}m`
@@ -11,7 +13,29 @@ function formatTime(minutes: number): string {
 }
 
 export default function Stats() {
+  const { user } = useAuth()
   const { data: s, isLoading } = useStats()
+
+  if (!user?.is_premium && !user?.is_admin) {
+    return (
+      <div className="max-w-2xl">
+        <h1 className="text-2xl font-semibold text-white tracking-tight mb-5">Stats</h1>
+        <div className="bg-[#1a1a1a] rounded-xl p-8 ring-1 ring-white/[0.06] flex flex-col items-center gap-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center">
+            <Lock size={20} className="text-zinc-500" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-white font-medium">Premium feature</p>
+            <p className="text-sm text-zinc-500">Stats are available to premium users.</p>
+          </div>
+          <div className="flex items-center gap-2 text-zinc-600">
+            <BarChart2 size={14} />
+            <span className="text-xs">Rating distribution · Monthly activity · Streaks</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (isLoading) return <LoadingSpinner />
   if (!s) return null
