@@ -48,10 +48,11 @@ func main() {
 	mediaH  := handler.NewMediaHandler(mediaRepo, episodeRepo, chapterRepo, cfg.TMDBKey)
 	listH   := handler.NewListHandler(listRepo, mediaRepo)
 	searchH  := handler.NewSearchHandler(cfg)
-	statsH   := handler.NewStatsHandler(mediaRepo)
-	shareH   := handler.NewShareHandler(listRepo)
-	importH  := handler.NewImportHandler(mediaRepo, episodeRepo, cfg)
-	healthH  := handler.NewHealthHandler(cfg)
+	statsH    := handler.NewStatsHandler(mediaRepo)
+	shareH    := handler.NewShareHandler(listRepo)
+	importH   := handler.NewImportHandler(mediaRepo, episodeRepo, cfg)
+	healthH   := handler.NewHealthHandler(cfg)
+	trendingH := handler.NewTrendingHandler(cfg)
 
 	r := chi.NewRouter()
 
@@ -134,11 +135,12 @@ func main() {
 		// Search
 		r.Get("/search", searchH.Search)
 
-		// Stats — premium only (admins pass through)
+		// Stats + Trending — premium only (admins pass through)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequirePremium)
 			r.Get("/stats", statsH.Get)
 			r.Get("/stats/summary", statsH.Summary)
+			r.Get("/trending/{category}", trendingH.Get)
 		})
 
 		// Import

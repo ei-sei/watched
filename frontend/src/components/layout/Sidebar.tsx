@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, Settings, LogOut, ShieldCheck, Lock } from 'lucide-react'
+import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, TrendingUp, Settings, LogOut, ShieldCheck, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import SyncIndicator from '@/components/ui/SyncIndicator'
 import { VERSION } from '@/version'
@@ -58,16 +58,29 @@ export default function Sidebar() {
           </NavLink>
         ))}
         {(user?.is_premium || user?.is_admin) ? (
-          <NavLink to="/stats" className={linkClass}>
-            <BarChart2 size={15} strokeWidth={1.75} />
-            Stats
-          </NavLink>
+          <>
+            <NavLink to="/stats" className={linkClass}>
+              <BarChart2 size={15} strokeWidth={1.75} />
+              Stats
+            </NavLink>
+            <NavLink to="/trending" className={linkClass}>
+              <TrendingUp size={15} strokeWidth={1.75} />
+              Trending
+            </NavLink>
+          </>
         ) : (
-          <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
-            <BarChart2 size={15} strokeWidth={1.75} />
-            Stats
-            <Lock size={11} className="ml-auto" />
-          </span>
+          <>
+            <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
+              <BarChart2 size={15} strokeWidth={1.75} />
+              Stats
+              <Lock size={11} className="ml-auto" />
+            </span>
+            <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
+              <TrendingUp size={15} strokeWidth={1.75} />
+              Trending
+              <Lock size={11} className="ml-auto" />
+            </span>
+          </>
         )}
       </nav>
 
