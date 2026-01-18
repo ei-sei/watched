@@ -83,14 +83,11 @@ function TrendingRow({ section }: { section: TrendingSection }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{section.label}</p>
-      <div className="relative">
-        <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {section.items.map(item => (
-            <PosterCard key={item.id} item={item} />
-          ))}
-          <div className="flex-none w-4" aria-hidden="true" />
-        </div>
-        <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0d0d0d] to-transparent pointer-events-none" />
+      {/* Mobile: horizontal scroll — Desktop: wrapping grid */}
+      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-x-visible">
+        {section.items.map(item => (
+          <PosterCard key={item.id} item={item} />
+        ))}
       </div>
     </div>
   )
