@@ -27,8 +27,10 @@ async function doRefresh(): Promise<string> {
 client.interceptors.request.use(async (config) => {
   let token = await storage.get('access_token')
 
-  // Proactively refresh if the token expires within 5 minutes
-  if (token && tokenExpiresAt(token) - Date.now() < 5 * 60 * 1000) {
+  // Proactively refresh if the token expires within 5 minutes.
+  // Skip for /auth/refresh itself to avoid a deadlock where doRefresh()
+  // re-enters this interceptor and queues behind itself.
+  if (token && tokenExpiresAt(token) - Date.now() < 5 * 60 * 1000 && !config.url?.includes('/auth/refresh')) {
     if (!isRefreshing) {
       isRefreshing = true
       const oldToken = token
