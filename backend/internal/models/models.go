@@ -114,6 +114,8 @@ type SearchResult struct {
 	PosterURL   *string        `json:"poster_url"`
 	Description *string        `json:"description"`
 	Extra       map[string]any `json:"extra"`
+	// Popularity is used for server-side ranking only — not serialised.
+	Popularity float64 `json:"-"`
 }
 
 type InviteCode struct {
