@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, TrendingUp, Settings, LogOut, ShieldCheck, MoreHorizontal, X, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { VERSION } from '@/version'
 
 const TABS = [
   { to: '/films',  label: 'Movies', icon: Film },
@@ -37,9 +38,12 @@ export default function BottomNav() {
         <div className="fixed bottom-16 inset-x-0 z-40 mx-3 mb-1 bg-[#1a1a1a] rounded-2xl ring-1 ring-white/[0.08] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
             <p className="text-xs text-zinc-500 font-medium">{user?.display_name ?? user?.username}</p>
-            <button onClick={() => setOpen(false)} className="text-zinc-600 hover:text-zinc-300">
-              <X size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-700">v{VERSION}</span>
+              <button onClick={() => setOpen(false)} className="text-zinc-600 hover:text-zinc-300">
+                <X size={16} />
+              </button>
+            </div>
           </div>
           <div className="p-2 space-y-0.5">
             {(user?.is_premium || user?.is_admin) ? (
