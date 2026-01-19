@@ -4,28 +4,26 @@ import MediaGrid from '@/components/media/MediaGrid'
 import EmptyState from '@/components/ui/EmptyState'
 import { syncMediaIfStale } from '@/offline/sync'
 import type { MediaType, MediaStatus } from '@/types/media'
-import { MEDIA_TYPE_LABELS } from '@/utils/constants'
+import { MEDIA_TYPE_LABELS, STATUS_LABELS, STATUS_LABELS_BOOK } from '@/utils/constants'
 
 interface Props { type: MediaType }
 
-const STATUSES: { value: MediaStatus | ''; label: string }[] = [
-  { value: '', label: 'All' },
-  { value: 'want_to', label: 'Want to' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'dropped', label: 'Dropped' },
-  { value: 'on_hold', label: 'On Hold' },
-]
+const STATUS_OPTIONS: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'completed', 'on_hold', 'dropped']
 
 export default function MediaLibrary({ type }: Props) {
-  const [status, setStatus] = useState<MediaStatus | ''>('')
+  const [status, setStatus] = useState<MediaStatus | ''>('in_progress')
   const [sort, setSort] = useState('created_at')
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   // Sync from server on each category visit (no-op if synced recently)
-  useEffect(() => { syncMediaIfStale() }, [type])
+  // Also reset filters so each category always opens on "In Progress"
+  useEffect(() => {
+    syncMediaIfStale()
+    setStatus('in_progress')
+    setPage(1)
+  }, [type])
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
@@ -63,24 +61,30 @@ export default function MediaLibrary({ type }: Props) {
       />
 
       {/* Filters */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {STATUSES.map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => { setStatus(value as MediaStatus | ''); setPage(1) }}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-              status === value
-                ? 'bg-white/10 text-white'
-                : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center gap-2">
+        <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1">
+          {STATUS_OPTIONS.map((value) => {
+            const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
+            const label = value === '' ? 'All' : labels[value]
+            return (
+              <button
+                key={value}
+                onClick={() => { setStatus(value); setPage(1) }}
+                className={`flex-none px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                  status === value
+                    ? 'bg-white/10 text-white'
+                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="ml-auto bg-transparent text-zinc-500 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors outline-none cursor-pointer"
+          className="flex-none bg-transparent text-zinc-500 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors outline-none cursor-pointer"
         >
           <option value="created_at">Date added</option>
           <option value="rating">Rating</option>
