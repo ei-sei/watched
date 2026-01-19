@@ -1,11 +1,29 @@
-import { STATUS_LABELS, STATUS_COLOURS } from '@/utils/constants'
+import { Bookmark, Play, CheckCircle, PauseCircle, XCircle } from 'lucide-react'
+import { STATUS_LABELS, STATUS_LABELS_BOOK, STATUS_COLOURS } from '@/utils/constants'
 
-interface Props { status: string }
+const ICONS = {
+  want_to:     Bookmark,
+  in_progress: Play,
+  completed:   CheckCircle,
+  on_hold:     PauseCircle,
+  dropped:     XCircle,
+} as const
 
-export default function StatusBadge({ status }: Props) {
+interface Props {
+  status: string
+  mediaType?: string
+}
+
+export default function StatusBadge({ status, mediaType }: Props) {
+  const labels = mediaType === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
+  const label = labels[status] ?? status
+  const colour = STATUS_COLOURS[status] ?? 'bg-zinc-700/60 text-zinc-400'
+  const Icon = ICONS[status as keyof typeof ICONS]
+
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOURS[status] ?? 'bg-zinc-700 text-zinc-300'}`}>
-      {STATUS_LABELS[status] ?? status}
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${colour}`}>
+      {Icon && <Icon size={10} strokeWidth={2.5} />}
+      {label}
     </span>
   )
 }
