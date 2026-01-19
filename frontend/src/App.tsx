@@ -142,13 +142,13 @@ export default function App() {
               <Route path="/u/:username" element={<PublicProfile />} />
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
-                <Route path="films" element={<MediaLibrary type="film" />} />
+                <Route path="films" element={<MediaLibrary key="film" type="film" />} />
                 <Route path="films/:id" element={<MediaDetail />} />
-                <Route path="tv" element={<MediaLibrary type="tv_show" />} />
+                <Route path="tv" element={<MediaLibrary key="tv_show" type="tv_show" />} />
                 <Route path="tv/:id" element={<MediaDetail />} />
-                <Route path="books" element={<MediaLibrary type="book" />} />
+                <Route path="books" element={<MediaLibrary key="book" type="book" />} />
                 <Route path="books/:id" element={<MediaDetail />} />
-                <Route path="anime" element={<MediaLibrary type="anime" />} />
+                <Route path="anime" element={<MediaLibrary key="anime" type="anime" />} />
                 <Route path="anime/:id" element={<MediaDetail />} />
                 <Route path="search" element={<Search />} />
                 <Route path="stats" element={<Stats />} />
