@@ -82,15 +82,20 @@ export default function Search() {
 
       {data && !isFetching && (
         <div className="space-y-2">
-          {data.map((result) => (
-            <div key={result.external_id} className="flex gap-3 bg-[#1a1a1a] rounded-lg p-3 items-start ring-1 ring-white/[0.06]">
+          {data.map((result, i) => (
+            <div key={result.external_id} className={`flex gap-3 rounded-lg p-3 items-start ring-1 ${i === 0 && data.length > 1 ? 'bg-[#1f1f2e] ring-indigo-500/30' : 'bg-[#1a1a1a] ring-white/[0.06]'}`}>
               {result.poster_url ? (
                 <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
               ) : (
                 <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0" />
               )}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
+                  {i === 0 && data.length > 1 && (
+                    <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">Best Match</span>
+                  )}
+                </div>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {result.year} · {result.media_type.replace('_', ' ')} · {result.source}
                 </p>
