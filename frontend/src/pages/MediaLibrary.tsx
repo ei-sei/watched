@@ -56,28 +56,34 @@ export default function MediaLibrary({ type }: Props) {
       />
 
       {/* Filters */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {STATUS_OPTIONS.map((value) => {
-          const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
-          const label = value === '' ? 'All' : labels[value]
-          return (
-            <button
-              key={value}
-              onClick={() => { setStatus(value); setPage(1) }}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                status === value
-                  ? 'bg-white/10 text-white'
-                  : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
-              }`}
-            >
-              {label}
-            </button>
-          )
-        })}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {STATUS_OPTIONS.map((value) => {
+              const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
+              const label = value === '' ? 'All' : labels[value]
+              return (
+                <button
+                  key={value}
+                  onClick={() => { setStatus(value); setPage(1) }}
+                  className={`flex-none px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    status === value
+                      ? 'bg-white/10 text-white'
+                      : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          {/* Fade to indicate more options */}
+          <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#0d0d0d] to-transparent pointer-events-none" />
+        </div>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="ml-auto bg-transparent text-zinc-500 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors outline-none cursor-pointer"
+          className="flex-none bg-transparent text-zinc-500 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors outline-none cursor-pointer"
         >
           <option value="created_at">Date added</option>
           <option value="rating">Rating</option>
