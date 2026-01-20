@@ -181,7 +181,7 @@ func main() {
 
 	// Background job: auto-move stale in_progress items to on_hold every 6 hours
 	go func() {
-		ticker := time.NewTicker(6 * time.Hour)
+		ticker := time.NewTicker(7 * 24 * time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
 			if err := mediaRepo.AutoMarkInactive(context.Background()); err != nil {
