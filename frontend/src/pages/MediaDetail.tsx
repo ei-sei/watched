@@ -44,6 +44,7 @@ export default function MediaDetail() {
   const { show } = useToast()
   const [refreshing, setRefreshing] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Pull fresh episodes/chapters for this item in the background
   useEffect(() => {
@@ -59,7 +60,6 @@ export default function MediaDetail() {
   const onCooldown = cooldownRemaining > 0
 
   const handleDelete = async () => {
-    if (!confirm('Remove from library?')) return
     await remove.mutateAsync(item.id)
     navigate(-1)
   }
@@ -105,7 +105,7 @@ export default function MediaDetail() {
               </p>
             </div>
             <button
-              onClick={handleDelete}
+              onClick={() => setConfirmDelete(true)}
               className="p-1.5 text-zinc-700 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
               title="Remove from library"
             >
@@ -240,6 +240,31 @@ export default function MediaDetail() {
       )}
       {(item.media_type === 'tv_show' || item.media_type === 'anime') && <EpisodeTracker item={item} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+          <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
+            <h2 className="text-white font-semibold">Remove from library</h2>
+            <p className="text-zinc-400 text-sm">
+              <span className="text-white font-medium">{item.title}</span> will be removed from your library. This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setConfirmDelete(false); handleDelete() }}
+                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
