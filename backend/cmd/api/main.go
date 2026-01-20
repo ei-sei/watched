@@ -87,6 +87,7 @@ func main() {
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Authenticate(cfg.JWTSecret))
+		r.Use(auth.RateLimit(300, 50)) // 300 req/min, burst of 50
 
 		// Current user
 		r.Get("/users/me", userH.Me)
@@ -132,8 +133,8 @@ func main() {
 			})
 		})
 
-		// Search
-		r.Get("/search", searchH.Search)
+		// Search — stricter limit since each request fans out to 3-4 external APIs
+		r.With(auth.RateLimit(30, 10)).Get("/search", searchH.Search)
 
 		// Stats + Trending — premium only (admins pass through)
 		r.Group(func(r chi.Router) {
