@@ -3,7 +3,7 @@ import { db } from './db'
 import { getPending, dequeue, incrementRetry } from './queue'
 import type { MediaItem, EpisodeLog, ChapterLog, PaginatedResponse } from '@/types/media'
 
-const MAX_RETRIES = 3
+const MAX_RETRIES = 5
 const FLUSH_CONCURRENCY = 3
 
 // ── Queue flush ──────────────────────────────────────────────────────────────
@@ -19,7 +19,13 @@ export async function flushQueue(): Promise<void> {
     try {
       await client.request({ method: item.method, url: item.url, data: item.data })
       await dequeue(item.id!)
-    } catch {
+    } catch (err: any) {
+      const status = err?.response?.status
+      // Non-retryable client errors — drop immediately rather than burning retries
+      if (status && status >= 400 && status < 500 && status !== 429) {
+        await dequeue(item.id!)
+        return
+      }
       await incrementRetry(item.id!)
     }
   }
@@ -45,6 +51,9 @@ export function syncMediaIfStale(): void {
 
 export async function syncMedia(): Promise<void> {
   window.dispatchEvent(new Event('watched:sync-start'))
+  // Flush any queued mutations before pulling — ensures server state reflects
+  // local changes before we overwrite IndexedDB with the server response.
+  await flushQueue()
   try {
     const allItems: MediaItem[] = []
     let page = 1
