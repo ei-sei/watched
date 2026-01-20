@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useLocalMediaList } from '@/hooks/useLocalMedia'
 import MediaGrid from '@/components/media/MediaGrid'
 import EmptyState from '@/components/ui/EmptyState'
@@ -12,13 +13,26 @@ const STATUS_OPTIONS: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'com
 
 export default function MediaLibrary({ type }: Props) {
   const [status, setStatus] = useState<MediaStatus | ''>('in_progress')
+  const [statusOpen, setStatusOpen] = useState(false)
   const [sort, setSort] = useState('created_at')
+  const statusRef = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   // Sync from server on each category visit (no-op if synced recently)
   useEffect(() => { syncMediaIfStale() }, [type])
+
+  // Close status popover on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setStatusOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
@@ -57,33 +71,42 @@ export default function MediaLibrary({ type }: Props) {
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1 min-w-0">
-          <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            {STATUS_OPTIONS.map((value) => {
-              const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
-              const label = value === '' ? 'All' : labels[value]
-              return (
-                <button
-                  key={value}
-                  onClick={() => { setStatus(value); setPage(1) }}
-                  className={`flex-none px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    status === value
-                      ? 'bg-white/10 text-white'
-                      : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
-                  }`}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-          {/* Fade to indicate more options */}
-          <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-[#0d0d0d] to-transparent pointer-events-none" />
+        {/* Status toggle */}
+        <div ref={statusRef} className="relative">
+          <button
+            onClick={() => setStatusOpen((v) => !v)}
+            className="flex items-center gap-1.5 bg-[#1a1a1a] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-white/20"
+          >
+            {status === '' ? 'All' : (type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS)[status]}
+            <ChevronDown size={12} className={`text-zinc-500 transition-transform ${statusOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {statusOpen && (
+            <div className="absolute top-full left-0 mt-1 bg-[#1a1a1a] border border-white/[0.08] rounded-lg overflow-hidden z-10 min-w-[140px] shadow-lg">
+              {STATUS_OPTIONS.map((value) => {
+                const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
+                const label = value === '' ? 'All' : labels[value]
+                return (
+                  <button
+                    key={value}
+                    onClick={() => { setStatus(value); setPage(1); setStatusOpen(false) }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                      status === value
+                        ? 'text-white bg-white/10'
+                        : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
+
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="flex-none bg-transparent text-zinc-500 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors outline-none cursor-pointer"
+          className="ml-auto bg-transparent text-zinc-500 text-xs px-2 py-1 rounded-md hover:bg-white/5 transition-colors outline-none cursor-pointer"
         >
           <option value="created_at">Date added</option>
           <option value="rating">Rating</option>
