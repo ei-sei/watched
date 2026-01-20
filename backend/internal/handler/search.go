@@ -313,6 +313,9 @@ func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.Sea
 			MalID  int    `json:"mal_id"`
 			Title  string `json:"title"`
 			Year   *int   `json:"year"`
+			Aired  struct {
+				From *string `json:"from"`
+			} `json:"aired"`
 			Images struct {
 				JPG struct {
 					LargeImageURL *string `json:"large_image_url"`
@@ -340,12 +343,20 @@ func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.Sea
 		if a.Score != nil {
 			pop = *a.Score * 10 // scale 0–10 → 0–100 to roughly match TMDB popularity range
 		}
+		year := a.Year
+		if year == nil && a.Aired.From != nil && len(*a.Aired.From) >= 4 {
+			var y int
+			fmt.Sscanf((*a.Aired.From)[:4], "%d", &y)
+			if y > 0 {
+				year = &y
+			}
+		}
 		out = append(out, models.SearchResult{
 			Source:      "jikan",
 			MediaType:   string(models.MediaTypeAnime),
 			ExternalID:  fmt.Sprintf("mal:%d", a.MalID),
 			Title:       a.Title,
-			Year:        a.Year,
+			Year:        year,
 			PosterURL:   poster,
 			Description: &desc,
 			Extra:       extra,
