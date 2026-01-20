@@ -71,8 +71,8 @@ export default function MediaLibrary({ type }: Props) {
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        {/* Status toggle */}
-        <div ref={statusRef} className="relative">
+        {/* Mobile: compact dropdown toggle */}
+        <div ref={statusRef} className="relative md:hidden">
           <button
             onClick={() => setStatusOpen((v) => !v)}
             className="flex items-center gap-1.5 bg-[#1a1a1a] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-white/20"
@@ -101,6 +101,27 @@ export default function MediaLibrary({ type }: Props) {
               })}
             </div>
           )}
+        </div>
+
+        {/* Desktop: pill row (option A) */}
+        <div className="hidden md:flex items-center gap-1.5 flex-wrap">
+          {STATUS_OPTIONS.map((value) => {
+            const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
+            const label = value === '' ? 'All' : labels[value]
+            return (
+              <button
+                key={value}
+                onClick={() => { setStatus(value); setPage(1) }}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                  status === value
+                    ? 'bg-white/10 text-white'
+                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
 
         <select
