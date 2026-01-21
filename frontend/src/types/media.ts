@@ -64,11 +64,6 @@ export interface SearchResult {
   extra: Record<string, unknown>
 }
 
-export interface SearchResponse {
-  results: SearchResult[]
-  total: number
-}
-
 export interface StatsSummary {
   films:    { total: number; this_month: number; avg_rating: number | null }
   tv_shows: { total: number; in_progress: number; episodes_this_month: number }

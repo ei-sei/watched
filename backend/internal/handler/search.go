@@ -69,7 +69,6 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	var all []models.SearchResult
 	for res := range results {
 		if res.err != nil {
-			fmt.Printf("[search] error: %v\n", res.err)
 			continue
 		}
 		all = append(all, res.items...)
