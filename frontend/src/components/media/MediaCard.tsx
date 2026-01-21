@@ -17,8 +17,8 @@ export default function MediaCard({ item }: Props) {
   return (
     <>
       <Link to={`/${ROUTE[item.media_type]}/${item.id}`} className="group block">
-        <div className="rounded-lg overflow-hidden bg-[#1a1a1a] hover:bg-[#202020] transition-colors ring-1 ring-white/[0.06] hover:ring-white/[0.12]">
-          <div className="aspect-[2/3] bg-[#222222] relative overflow-hidden">
+        <div className="rounded-lg bg-[#1a1a1a] hover:bg-[#202020] transition-colors ring-1 ring-white/[0.06] hover:ring-white/[0.12]">
+          <div className="aspect-[2/3] bg-[#222222] relative overflow-hidden rounded-t-lg">
             {item.poster_url ? (
               <img
                 src={item.poster_url}
