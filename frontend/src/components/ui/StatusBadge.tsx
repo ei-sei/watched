@@ -21,8 +21,8 @@ export default function StatusBadge({ status, mediaType }: Props) {
   const Icon = ICONS[status as keyof typeof ICONS]
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${colour}`}>
-      {Icon && <Icon size={10} strokeWidth={2.5} />}
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none ${colour}`}>
+      {Icon && <Icon size={9} strokeWidth={2.5} />}
       {label}
     </span>
   )
