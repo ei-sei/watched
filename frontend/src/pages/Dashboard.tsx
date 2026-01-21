@@ -25,7 +25,7 @@ export default function Dashboard() {
           <p className="text-zinc-600 text-sm">Nothing in progress yet.</p>
         )}
         {inProgress && inProgress.items.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {inProgress.items.map((item: MediaItem) => (
               <MediaCard key={item.id} item={item} />
             ))}
@@ -37,7 +37,7 @@ export default function Dashboard() {
       {recentlyAdded && recentlyAdded.items.length > 0 && (
         <section>
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Recently Added</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {recentlyAdded.items.map((item: MediaItem) => (
               <MediaCard key={item.id} item={item} />
             ))}
