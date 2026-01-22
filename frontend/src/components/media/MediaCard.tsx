@@ -34,7 +34,7 @@ export default function MediaCard({ item }: Props) {
           </div>
           <div className="px-2.5 py-2 space-y-1.5">
             <p className="text-xs font-medium text-zinc-200 truncate leading-snug">{item.title}</p>
-            <div className="flex items-end justify-between pt-0.5">
+            <div className="flex items-center gap-1.5 pt-0.5">
               {/* Mobile: tap badge opens sheet; desktop: badge is decorative */}
               <button
                 className="md:hidden"
@@ -45,7 +45,7 @@ export default function MediaCard({ item }: Props) {
               <span className="hidden md:inline-flex">
                 <StatusBadge status={item.status} mediaType={item.media_type} />
               </span>
-              <span className="flex-shrink-0"><RatingDisplay rating={item.rating} size="sm" /></span>
+              <span className="flex-shrink-0 ml-auto"><RatingDisplay rating={item.rating} size="sm" /></span>
             </div>
           </div>
         </div>
