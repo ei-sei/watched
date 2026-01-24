@@ -187,9 +187,7 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 				}
 			}
 
-			if poster == nil {
-				toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID, userID: userID})
-			}
+			toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID, userID: userID})
 		}
 
 		result.Imported++
