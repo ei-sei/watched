@@ -60,7 +60,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		fetch(h.searchGoogleBooks)
 	}
 	if mediaType == "" || mediaType == string(models.MediaTypeAnime) {
-		fetch(h.searchJikan)
+		fetch(h.searchAnime)
 	}
 
 	wg.Wait()
@@ -356,6 +356,95 @@ func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.Sea
 			ExternalID:  fmt.Sprintf("mal:%d", a.MalID),
 			Title:       a.Title,
 			Year:        year,
+			PosterURL:   poster,
+			Description: &desc,
+			Extra:       extra,
+			Popularity:  pop,
+		})
+	}
+	return out, nil
+}
+
+// searchAnime tries AniList first, falls back to Jikan if AniList returns nothing.
+func (h *SearchHandler) searchAnime(ctx context.Context, q string) ([]models.SearchResult, error) {
+	results, err := h.searchAniList(ctx, q)
+	if err != nil || len(results) == 0 {
+		return h.searchJikan(ctx, q)
+	}
+	return results, nil
+}
+
+func (h *SearchHandler) searchAniList(ctx context.Context, q string) ([]models.SearchResult, error) {
+	payload, _ := json.Marshal(map[string]any{
+		"query": `query($s:String){Page(page:1,perPage:20){media(search:$s,type:ANIME,sort:SEARCH_MATCH){id idMal title{romaji english} episodes coverImage{large} averageScore description startDate{year}}}}`,
+		"variables": map[string]string{"s": q},
+	})
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(string(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var raw struct {
+		Data struct {
+			Page struct {
+				Media []struct {
+					ID    int  `json:"id"`
+					IdMal *int `json:"idMal"`
+					Title struct {
+						Romaji  string `json:"romaji"`
+						English string `json:"english"`
+					} `json:"title"`
+					Episodes   *int `json:"episodes"`
+					CoverImage struct {
+						Large string `json:"large"`
+					} `json:"coverImage"`
+					AverageScore *int   `json:"averageScore"`
+					Description  string `json:"description"`
+					StartDate    struct {
+						Year *int `json:"year"`
+					} `json:"startDate"`
+				} `json:"media"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+
+	var out []models.SearchResult
+	for _, m := range raw.Data.Page.Media {
+		if m.IdMal == nil {
+			continue // no MAL ID — skip to keep external_id format consistent
+		}
+		title := m.Title.English
+		if title == "" {
+			title = m.Title.Romaji
+		}
+		var poster *string
+		if m.CoverImage.Large != "" {
+			s := m.CoverImage.Large
+			poster = &s
+		}
+		pop := 0.0
+		if m.AverageScore != nil {
+			pop = float64(*m.AverageScore) // AniList scores are 0–100, same scale as TMDB popularity
+		}
+		desc := m.Description
+		extra := map[string]any{
+			"mal_id":   *m.IdMal,
+			"episodes": m.Episodes,
+			"score":    m.AverageScore,
+		}
+		out = append(out, models.SearchResult{
+			Source:      "anilist",
+			MediaType:   string(models.MediaTypeAnime),
+			ExternalID:  fmt.Sprintf("mal:%d", *m.IdMal),
+			Title:       title,
+			Year:        m.StartDate.Year,
 			PosterURL:   poster,
 			Description: &desc,
 			Extra:       extra,
