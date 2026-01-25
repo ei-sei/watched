@@ -32,7 +32,7 @@ export default function MediaCard({ item }: Props) {
               </div>
             )}
           </div>
-          <div className="px-2.5 py-2 space-y-1.5">
+          <div className="px-2 py-1.5 space-y-1">
             <p className="text-xs font-medium text-zinc-200 truncate leading-snug">{item.title}</p>
             <div className="flex items-center gap-1.5 h-5">
               {/* Mobile: tap badge opens sheet; desktop: badge is decorative */}
