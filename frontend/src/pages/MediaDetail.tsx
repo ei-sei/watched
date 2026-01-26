@@ -32,6 +32,22 @@ function setLastRefresh(item: MediaItem) {
 
 const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'dropped', 'on_hold']
 
+// Convert stored YYYY-MM-DD to display DD-MM-YYYY
+function toDisplay(iso: string): string {
+  const d = iso.slice(0, 10).split('-')
+  if (d.length === 3) return `${d[2]}-${d[1]}-${d[0]}`
+  return iso
+}
+
+// Convert DD-MM-YYYY input back to YYYY-MM-DD for storage
+function toISO(display: string): string | null {
+  const parts = display.trim().split('-')
+  if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+    return `${parts[2]}-${parts[1]}-${parts[0]}`
+  }
+  return null
+}
+
 function DateField({ label, value, onChange }: {
   label: string
   value: string | null | undefined
@@ -44,8 +60,9 @@ function DateField({ label, value, onChange }: {
     const trimmed = draft.trim()
     if (!trimmed) {
       onChange(null)
-    } else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      onChange(trimmed)
+    } else {
+      const iso = toISO(trimmed)
+      if (iso) onChange(iso)
     }
     setEditing(false)
   }
@@ -58,7 +75,7 @@ function DateField({ label, value, onChange }: {
           type="text"
           inputMode="numeric"
           value={draft}
-          placeholder="YYYY-MM-DD"
+          placeholder="DD-MM-YYYY"
           autoFocus
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
@@ -73,7 +90,7 @@ function DateField({ label, value, onChange }: {
     <div>
       <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">{label}</p>
       <button
-        onClick={() => { setDraft(value ?? ''); setEditing(true) }}
+        onClick={() => { setDraft(value ? toDisplay(value) : ''); setEditing(true) }}
         className="text-sm text-zinc-400 hover:text-white transition-colors"
       >
         {value ? formatDate(value) : <span className="text-zinc-700">Add date</span>}
