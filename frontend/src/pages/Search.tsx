@@ -1,9 +1,28 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSearch } from '@/hooks/useSearch'
 import { useCreateMedia } from '@/hooks/useMedia'
 import { useToast } from '@/components/ui/Toast'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { Clock, X } from 'lucide-react'
 import type { MediaType, SearchResult } from '@/types/media'
+
+const RECENTS_KEY = 'search_recents'
+const MAX_RECENTS = 8
+
+function getRecents(): string[] {
+  try { return JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') } catch { return [] }
+}
+
+function saveRecent(q: string) {
+  const trimmed = q.trim()
+  if (!trimmed) return
+  const prev = getRecents().filter((r) => r !== trimmed)
+  localStorage.setItem(RECENTS_KEY, JSON.stringify([trimmed, ...prev].slice(0, MAX_RECENTS)))
+}
+
+function removeRecent(q: string) {
+  localStorage.setItem(RECENTS_KEY, JSON.stringify(getRecents().filter((r) => r !== q)))
+}
 
 const TABS = [
   { value: 'multi',   label: 'All' },
@@ -20,8 +39,40 @@ export default function Search() {
   const { query, setQuery, data, isFetching } = useSearch(tab)
   const create = useCreateMedia()
   const { show } = useToast()
+  const [focused, setFocused] = useState(false)
+  const [recents, setRecents] = useState<string[]>(getRecents)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const showRecents = focused && query.length === 0 && recents.length > 0
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        inputRef.current && !inputRef.current.contains(e.target as Node) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const applyRecent = (q: string) => {
+    setQuery(q)
+    setFocused(false)
+    inputRef.current?.blur()
+  }
+
+  const deleteRecent = (q: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    removeRecent(q)
+    setRecents(getRecents())
+  }
 
   const handleAdd = async (result: SearchResult) => {
+    saveRecent(query.trim())
     try {
       const totalProgress =
         (typeof result.extra?.episodes === 'number' && result.extra.episodes > 0 ? result.extra.episodes : undefined) ??
@@ -54,12 +105,44 @@ export default function Search() {
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-semibold text-white tracking-tight">Search</h1>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search movies, TV shows, books, anime…"
-        className="w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-4 py-3 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm placeholder:text-zinc-600"
-      />
+      <div className="relative">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && query.trim()) {
+              saveRecent(query.trim())
+              setRecents(getRecents())
+              setFocused(false)
+            }
+          }}
+          placeholder="Search movies, TV shows, books, anime…"
+          className="w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-4 py-3 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm placeholder:text-zinc-600"
+        />
+        {showRecents && (
+          <div ref={dropdownRef} className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/[0.08] rounded-lg overflow-hidden z-20 shadow-lg">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-wider px-3 pt-2 pb-1">Recent</p>
+            {recents.map((r) => (
+              <button
+                key={r}
+                onClick={() => applyRecent(r)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.04] transition-colors text-left"
+              >
+                <Clock size={13} className="text-zinc-600 flex-shrink-0" />
+                <span className="flex-1 truncate">{r}</span>
+                <span
+                  onClick={(e) => deleteRecent(r, e)}
+                  className="text-zinc-700 hover:text-zinc-400 transition-colors p-0.5"
+                >
+                  <X size={12} />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-1.5">
         {TABS.map(({ value, label }) => (
