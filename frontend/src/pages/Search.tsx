@@ -6,6 +6,14 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { Clock, X } from 'lucide-react'
 import type { MediaType, SearchResult } from '@/types/media'
 
+const GROUP_ORDER: SearchResult['media_type'][] = ['film', 'tv_show', 'anime', 'book']
+const GROUP_LABELS: Record<string, string> = {
+  film:    'Movies',
+  tv_show: 'TV Shows',
+  anime:   'Anime',
+  book:    'Books',
+}
+
 const TYPE_LABELS: Record<string, string> = {
   film:    'Movie',
   tv_show: 'TV Series',
@@ -59,6 +67,69 @@ const TABS = [
 ] as const
 
 type Tab = typeof TABS[number]['value']
+
+function ResultCard({ result, isBestMatch, onAdd }: { result: SearchResult; isBestMatch: boolean; onAdd: (r: SearchResult) => void }) {
+  return (
+    <div className={`flex gap-3 rounded-lg p-3 items-start ring-1 ${isBestMatch ? 'bg-[#1f1f2e] ring-indigo-500/30' : 'bg-[#1a1a1a] ring-white/[0.06]'}`}>
+      {result.poster_url ? (
+        <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
+      ) : (
+        <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
+          {isBestMatch && (
+            <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">Best Match</span>
+          )}
+        </div>
+        <p className="text-xs text-zinc-500 mt-0.5">{friendlyMeta(result)}</p>
+        {result.description && (
+          <p className="text-xs text-zinc-600 mt-1.5 line-clamp-2 leading-relaxed">{result.description}</p>
+        )}
+      </div>
+      <button
+        onClick={() => onAdd(result)}
+        className="flex-shrink-0 bg-white/8 hover:bg-white/12 text-zinc-200 text-xs px-3 py-1.5 rounded-md transition-colors"
+      >
+        Add
+      </button>
+    </div>
+  )
+}
+
+function renderResults(data: SearchResult[], tab: Tab, onAdd: (r: SearchResult) => void) {
+  // On specific tabs, flat list with best match highlight
+  if (tab !== 'multi') {
+    return (
+      <div className="space-y-2">
+        {data.map((result, i) => (
+          <ResultCard key={result.external_id} result={result} isBestMatch={i === 0 && data.length > 1} onAdd={onAdd} />
+        ))}
+      </div>
+    )
+  }
+
+  // On "All" tab, group by media type
+  const grouped = GROUP_ORDER.reduce<Record<string, SearchResult[]>>((acc, type) => {
+    const items = data.filter((r) => r.media_type === type)
+    if (items.length > 0) acc[type] = items
+    return acc
+  }, {})
+
+  return (
+    <>
+      {Object.entries(grouped).map(([type, items]) => (
+        <div key={type} className="space-y-2">
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{GROUP_LABELS[type]}</p>
+          {items.map((result, i) => (
+            <ResultCard key={result.external_id} result={result} isBestMatch={i === 0 && items.length > 1} onAdd={onAdd} />
+          ))}
+        </div>
+      ))}
+    </>
+  )
+}
 
 export default function Search() {
   const [tab, setTab] = useState<Tab>('multi')
@@ -189,39 +260,11 @@ export default function Search() {
       {isFetching && <LoadingSpinner />}
 
       {data && !isFetching && (
-        <div className="space-y-2">
-          {data.map((result, i) => (
-            <div key={result.external_id} className={`flex gap-3 rounded-lg p-3 items-start ring-1 ${i === 0 && data.length > 1 ? 'bg-[#1f1f2e] ring-indigo-500/30' : 'bg-[#1a1a1a] ring-white/[0.06]'}`}>
-              {result.poster_url ? (
-                <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
-              ) : (
-                <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
-                  {i === 0 && data.length > 1 && (
-                    <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">Best Match</span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  {friendlyMeta(result)}
-                </p>
-                {result.description && (
-                  <p className="text-xs text-zinc-600 mt-1.5 line-clamp-2 leading-relaxed">{result.description}</p>
-                )}
-              </div>
-              <button
-                onClick={() => handleAdd(result)}
-                className="flex-shrink-0 bg-white/8 hover:bg-white/12 text-zinc-200 text-xs px-3 py-1.5 rounded-md transition-colors"
-              >
-                Add
-              </button>
-            </div>
-          ))}
+        <div className="space-y-6">
           {data.length === 0 && query.length >= 2 && (
             <p className="text-zinc-600 text-sm text-center py-12">No results for "{query}"</p>
           )}
+          {renderResults(data, tab, handleAdd)}
         </div>
       )}
     </div>
