@@ -85,6 +85,15 @@ type BookChapterLog struct {
 	CompletedAt   *time.Time    `json:"completed_at"`
 }
 
+type Rewatch struct {
+	ID         int        `json:"id"`
+	UserID     int        `json:"user_id"`
+	MediaID    int        `json:"media_id"`
+	StartedAt  *string    `json:"started_at"`
+	FinishedAt *string    `json:"finished_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
 type UserList struct {
 	ID          int        `json:"id"`
 	UserID      int        `json:"user_id"`

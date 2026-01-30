@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
 import { useLocalMediaItem } from '@/hooks/useLocalMedia'
 import { db } from '@/offline/db'
 import { useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
@@ -12,7 +12,8 @@ import TVSeasonProgress from '@/components/tracking/TVSeasonProgress'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
 import { mediaApi } from '@/api/media'
-import { RefreshCw, Trash2 } from 'lucide-react'
+import type { Rewatch } from '@/api/media'
+import { RefreshCw, Trash2, RotateCcw, Plus, X } from 'lucide-react'
 import { STATUS_LABELS, STATUS_LABELS_BOOK, STATUS_COLOURS } from '@/utils/constants'
 import type { MediaItem, MediaStatus } from '@/types/media'
 import StatusBadge from '@/components/ui/StatusBadge'
@@ -95,6 +96,137 @@ function DateField({ label, value, onChange }: {
       >
         {value ? formatDate(value) : <span className="text-zinc-700">Add date</span>}
       </button>
+    </div>
+  )
+}
+
+function RewatchSection({ mediaId }: { mediaId: number }) {
+  const qc = useQueryClient()
+  const { show } = useToast()
+  const [adding, setAdding] = useState(false)
+  const [startedAt, setStartedAt] = useState('')
+  const [finishedAt, setFinishedAt] = useState('')
+
+  const { data: rewatches = [] } = useQuery<Rewatch[]>({
+    queryKey: ['rewatches', mediaId],
+    queryFn: () => mediaApi.listRewatches(mediaId).then((r) => r.data),
+  })
+
+  const toISO = (display: string): string | null => {
+    const parts = display.trim().split('-')
+    if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`
+    }
+    return null
+  }
+
+  const create = useMutation({
+    mutationFn: () => mediaApi.createRewatch(mediaId, {
+      started_at: startedAt ? toISO(startedAt) : null,
+      finished_at: finishedAt ? toISO(finishedAt) : null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rewatches', mediaId] })
+      setAdding(false)
+      setStartedAt('')
+      setFinishedAt('')
+      show('Rewatch logged', 'success')
+    },
+    onError: () => show('Failed to log rewatch', 'error'),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: number) => mediaApi.deleteRewatch(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rewatches', mediaId] }),
+  })
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <RotateCcw size={14} className="text-zinc-500" />
+          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
+            Rewatches {rewatches.length > 0 && <span className="text-zinc-600 font-normal">({rewatches.length})</span>}
+          </h3>
+        </div>
+        <button
+          onClick={() => setAdding((v) => !v)}
+          className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <Plus size={12} />
+          Log rewatch
+        </button>
+      </div>
+
+      {adding && (
+        <div className="bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-lg p-3 space-y-3">
+          <div className="flex gap-4">
+            <div>
+              <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">Started</p>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="DD-MM-YYYY"
+                value={startedAt}
+                onChange={(e) => setStartedAt(e.target.value)}
+                className="bg-white/[0.04] text-zinc-300 text-sm rounded-md px-3 py-1.5 w-32 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 placeholder:text-zinc-700"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">Finished</p>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="DD-MM-YYYY"
+                value={finishedAt}
+                onChange={(e) => setFinishedAt(e.target.value)}
+                className="bg-white/[0.04] text-zinc-300 text-sm rounded-md px-3 py-1.5 w-32 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 placeholder:text-zinc-700"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => create.mutate()}
+              disabled={create.isPending}
+              className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => { setAdding(false); setStartedAt(''); setFinishedAt('') }}
+              className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {rewatches.length > 0 && (
+        <div className="space-y-1.5">
+          {rewatches.map((rw) => (
+            <div key={rw.id} className="flex items-center justify-between bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-lg px-3 py-2">
+              <div className="text-xs text-zinc-400">
+                {rw.started_at || rw.finished_at ? (
+                  <>
+                    {rw.started_at && <span>{formatDate(rw.started_at)}</span>}
+                    {rw.started_at && rw.finished_at && <span className="text-zinc-600"> → </span>}
+                    {rw.finished_at && <span>{formatDate(rw.finished_at)}</span>}
+                  </>
+                ) : (
+                  <span className="text-zinc-600">No dates recorded</span>
+                )}
+              </div>
+              <button
+                onClick={() => remove.mutate(rw.id)}
+                className="text-zinc-700 hover:text-red-400 transition-colors p-0.5"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -321,6 +453,10 @@ export default function MediaDetail() {
       )}
       {(item.media_type === 'tv_show' || item.media_type === 'anime') && <EpisodeTracker item={item} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
+
+      {(item.media_type === 'film' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
+        <RewatchSection mediaId={item.id} />
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
