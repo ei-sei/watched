@@ -1,8 +1,15 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useAuth } from '@/hooks/useAuth'
 import { useTrending, type TrendingCategory, type TrendingItem, type TrendingSection } from '@/hooks/useTrending'
+import { useCreateMedia } from '@/hooks/useMedia'
+import { useToast } from '@/components/ui/Toast'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { Lock, TrendingUp } from 'lucide-react'
+import { db } from '@/offline/db'
+import { Lock, TrendingUp, X } from 'lucide-react'
+import { STATUS_LABELS, STATUS_COLOURS } from '@/utils/constants'
+import type { MediaStatus } from '@/types/media'
 
 const TABS: { key: TrendingCategory; label: string }[] = [
   { key: 'anime',  label: 'Anime'    },
@@ -10,9 +17,12 @@ const TABS: { key: TrendingCategory; label: string }[] = [
   { key: 'tv',     label: 'TV Shows' },
 ]
 
+const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'on_hold', 'dropped']
+
 export default function Trending() {
   const { user } = useAuth()
   const [tab, setTab] = useState<TrendingCategory>('anime')
+  const [selected, setSelected] = useState<TrendingItem | null>(null)
 
   if (!user?.is_premium && !user?.is_admin) {
     return (
@@ -56,12 +66,16 @@ export default function Trending() {
         ))}
       </div>
 
-      <TrendingContent category={tab} />
+      <TrendingContent category={tab} onSelect={setSelected} />
+
+      {selected && (
+        <AddModal item={selected} onClose={() => setSelected(null)} />
+      )}
     </div>
   )
 }
 
-function TrendingContent({ category }: { category: TrendingCategory }) {
+function TrendingContent({ category, onSelect }: { category: TrendingCategory; onSelect: (item: TrendingItem) => void }) {
   const { data, isLoading, isError } = useTrending(category)
 
   if (isLoading) return <LoadingSpinner />
@@ -73,30 +87,33 @@ function TrendingContent({ category }: { category: TrendingCategory }) {
   return (
     <div className="space-y-7">
       {data.map(section => (
-        <TrendingRow key={section.label} section={section} />
+        <TrendingRow key={section.label} section={section} onSelect={onSelect} />
       ))}
     </div>
   )
 }
 
-function TrendingRow({ section }: { section: TrendingSection }) {
+function TrendingRow({ section, onSelect }: { section: TrendingSection; onSelect: (item: TrendingItem) => void }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{section.label}</p>
       {/* Mobile: horizontal scroll — Desktop: wrapping grid */}
       <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-x-visible">
         {section.items.map(item => (
-          <PosterCard key={item.id} item={item} />
+          <PosterCard key={item.id} item={item} onSelect={onSelect} />
         ))}
       </div>
     </div>
   )
 }
 
-function PosterCard({ item }: { item: TrendingItem }) {
+function PosterCard({ item, onSelect }: { item: TrendingItem; onSelect: (item: TrendingItem) => void }) {
   return (
-    <div className="flex-none w-[88px]">
-      <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-white/[0.04] ring-1 ring-white/[0.06]">
+    <button
+      onClick={() => onSelect(item)}
+      className="flex-none w-[88px] text-left group"
+    >
+      <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-white/[0.04] ring-1 ring-white/[0.06] group-hover:ring-indigo-500/40 transition-all">
         {item.poster ? (
           <img
             src={item.poster}
@@ -118,6 +135,111 @@ function PosterCard({ item }: { item: TrendingItem }) {
         )}
       </div>
       <p className="text-[10px] text-zinc-400 mt-1.5 line-clamp-2 leading-tight">{item.title}</p>
+    </button>
+  )
+}
+
+function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }) {
+  const [status, setStatus] = useState<MediaStatus>('want_to')
+  const create = useCreateMedia()
+  const { show } = useToast()
+  const navigate = useNavigate()
+
+  // Check if already in library
+  const existing = useLiveQuery<import('@/types/media').MediaItem | undefined>(
+    () => item.external_id
+      ? db.mediaItems.filter((m) => m.external_id === item.external_id).first()
+      : Promise.resolve(undefined),
+    [item.external_id],
+  )
+
+  const handleAdd = async () => {
+    try {
+      const created = await create.mutateAsync({
+        media_type: item.media_type as 'film' | 'tv_show' | 'anime' | 'book',
+        external_id: item.external_id,
+        title: item.title,
+        year: item.year || undefined,
+        poster_url: item.poster || undefined,
+        status,
+      })
+      show(`"${item.title}" added`, 'success')
+      onClose()
+      navigate(`/media/${created.id}`)
+    } catch (err: unknown) {
+      const s = (err as { response?: { status?: number } })?.response?.status
+      if (s === 409) {
+        show('Already in library', 'error')
+      } else {
+        show('Failed to add', 'error')
+      }
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4">
+      <div className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-xl w-full sm:max-w-sm ring-1 ring-white/[0.08] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start gap-3 p-4 border-b border-white/[0.06]">
+          {item.poster ? (
+            <img src={item.poster} alt={item.title} className="w-12 h-[72px] rounded object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-12 h-[72px] rounded bg-white/[0.04] flex-shrink-0" />
+          )}
+          <div className="flex-1 min-w-0 pt-0.5">
+            <p className="text-white font-semibold text-sm leading-snug line-clamp-2">{item.title}</p>
+            {item.year > 0 && <p className="text-xs text-zinc-500 mt-0.5">{item.year}</p>}
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-400 transition-colors flex-shrink-0 mt-0.5">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Already in library */}
+          {existing && (
+            <button
+              onClick={() => { onClose(); navigate(`/media/${existing.id}`) }}
+              className="w-full text-left bg-indigo-500/10 rounded-lg px-3 py-2.5 ring-1 ring-indigo-500/20 text-sm text-indigo-300 hover:bg-indigo-500/15 transition-colors"
+            >
+              Already in your library →
+            </button>
+          )}
+
+          {/* Status picker */}
+          <div className="space-y-2">
+            <p className="text-xs text-zinc-600 uppercase tracking-wider">Add as</p>
+            <div className="flex flex-wrap gap-1.5">
+              {STATUSES.map((s) => {
+                const active = status === s
+                const colours = STATUS_COLOURS[s] ?? 'bg-zinc-700 text-zinc-300'
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setStatus(s)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                      active
+                        ? colours
+                        : 'bg-transparent text-zinc-600 hover:text-zinc-400 border border-white/[0.06] hover:border-white/[0.12]'
+                    }`}
+                  >
+                    {STATUS_LABELS[s]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Confirm button */}
+          <button
+            onClick={handleAdd}
+            disabled={create.isPending}
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {create.isPending ? 'Adding…' : 'Add to library'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

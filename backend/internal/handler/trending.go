@@ -14,11 +14,13 @@ import (
 )
 
 type TrendingItem struct {
-	ID     int     `json:"id"`
-	Title  string  `json:"title"`
-	Poster string  `json:"poster,omitempty"`
-	Score  float64 `json:"score,omitempty"`
-	Year   int     `json:"year,omitempty"`
+	ID         int     `json:"id"`
+	Title      string  `json:"title"`
+	Poster     string  `json:"poster,omitempty"`
+	Score      float64 `json:"score,omitempty"`
+	Year       int     `json:"year,omitempty"`
+	ExternalID string  `json:"external_id,omitempty"`
+	MediaType  string  `json:"media_type,omitempty"`
 }
 
 type TrendingSection struct {
@@ -125,6 +127,11 @@ func (h *TrendingHandler) fetchTMDB(ctx context.Context, mediaType string) ([]Tr
 		return nil, err
 	}
 
+	appType := "film"
+	if mediaType == "tv" {
+		appType = "tv_show"
+	}
+
 	items := make([]TrendingItem, 0, len(raw.Results))
 	for _, r := range raw.Results {
 		title := r.Title
@@ -142,11 +149,13 @@ func (h *TrendingHandler) fetchTMDB(ctx context.Context, mediaType string) ([]Tr
 			fmt.Sscanf(date[:4], "%d", &year)
 		}
 		items = append(items, TrendingItem{
-			ID:     r.ID,
-			Title:  title,
-			Poster: poster,
-			Score:  r.VoteAverage,
-			Year:   year,
+			ID:         r.ID,
+			Title:      title,
+			Poster:     poster,
+			Score:      r.VoteAverage,
+			Year:       year,
+			ExternalID: fmt.Sprintf("tmdb:%d", r.ID),
+			MediaType:  appType,
 		})
 	}
 
@@ -157,6 +166,7 @@ func (h *TrendingHandler) fetchTMDB(ctx context.Context, mediaType string) ([]Tr
 
 type aniListMedia struct {
 	ID    int `json:"id"`
+	IDMal int `json:"idMal"`
 	Title struct {
 		Romaji  string `json:"romaji"`
 		English string `json:"english"`
@@ -178,17 +188,17 @@ func (h *TrendingHandler) fetchAniList(ctx context.Context) ([]TrendingSection, 
 	query := fmt.Sprintf(`{
 		trending: Page(page:1, perPage:20) {
 			media(sort:TRENDING_DESC, type:ANIME, isAdult:false) {
-				id title{romaji english} coverImage{extraLarge large} averageScore startDate{year}
+				id idMal title{romaji english} coverImage{extraLarge large} averageScore startDate{year}
 			}
 		}
 		seasonal: Page(page:1, perPage:20) {
 			media(sort:POPULARITY_DESC, type:ANIME, season:%s, seasonYear:%d, isAdult:false) {
-				id title{romaji english} coverImage{extraLarge large} averageScore startDate{year}
+				id idMal title{romaji english} coverImage{extraLarge large} averageScore startDate{year}
 			}
 		}
 		upcoming: Page(page:1, perPage:20) {
 			media(sort:POPULARITY_DESC, type:ANIME, season:%s, seasonYear:%d, isAdult:false) {
-				id title{romaji english} coverImage{extraLarge large} averageScore startDate{year}
+				id idMal title{romaji english} coverImage{extraLarge large} averageScore startDate{year}
 			}
 		}
 	}`, curSeason, curYear, nxtSeason, nxtYear)
@@ -242,12 +252,18 @@ func mapAniListItems(media []aniListMedia) []TrendingItem {
 		if poster == "" {
 			poster = m.CoverImage.Large
 		}
+		extID := fmt.Sprintf("anilist:%d", m.ID)
+		if m.IDMal != 0 {
+			extID = fmt.Sprintf("mal:%d", m.IDMal)
+		}
 		items = append(items, TrendingItem{
-			ID:     m.ID,
-			Title:  title,
-			Poster: poster,
-			Score:  float64(m.AverageScore) / 10.0,
-			Year:   m.StartDate.Year,
+			ID:         m.ID,
+			Title:      title,
+			Poster:     poster,
+			Score:      float64(m.AverageScore) / 10.0,
+			Year:       m.StartDate.Year,
+			ExternalID: extID,
+			MediaType:  "anime",
 		})
 	}
 	return items

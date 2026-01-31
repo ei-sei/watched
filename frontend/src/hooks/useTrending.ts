@@ -7,6 +7,8 @@ export type TrendingItem = {
   poster: string
   score: number
   year: number
+  external_id: string
+  media_type: string
 }
 
 export type TrendingSection = {
