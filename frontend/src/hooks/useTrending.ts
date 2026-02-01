@@ -9,6 +9,7 @@ export type TrendingItem = {
   year: number
   external_id: string
   media_type: string
+  synopsis?: string
 }
 
 export type TrendingSection = {
