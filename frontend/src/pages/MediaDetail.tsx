@@ -121,7 +121,10 @@ function RewatchSection({ mediaId, mediaType, completedAt }: { mediaId: number; 
       qc.invalidateQueries({ queryKey: ['rewatches', mediaId] })
       show('Rewatch logged', 'success')
     },
-    onError: () => show('Failed to log rewatch', 'error'),
+    onError: (err: unknown) => {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      show(status === 409 ? 'Already logged today' : 'Failed to log rewatch', 'error')
+    },
   })
 
   const remove = useMutation({
