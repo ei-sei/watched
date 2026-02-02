@@ -3,6 +3,42 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useAuth } from '@/hooks/useAuth'
 import { BarChart2, Lock } from 'lucide-react'
 
+function Sparkline({ data, colour, id }: { data: number[]; colour: string; id: string }) {
+  const w = 200
+  const h = 48
+  const max = Math.max(...data, 1)
+  const pts = data.map((v, i) => ({
+    x: (i / Math.max(data.length - 1, 1)) * w,
+    y: h - 4 - (v / max) * (h - 8),
+  }))
+
+  // Smooth cubic bezier path
+  const linePath = pts.reduce((path, pt, i) => {
+    if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+    const prev = pts[i - 1]
+    const cx = ((prev.x + pt.x) / 2).toFixed(1)
+    return `${path} C ${cx} ${prev.y.toFixed(1)}, ${cx} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+  }, '')
+
+  const last = pts[pts.length - 1]
+  const areaPath = `${linePath} L ${last.x.toFixed(1)} ${h} L 0 ${h} Z`
+  const gradId = `spark-${id}`
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 48 }} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={colour} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={colour} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill={`url(#${gradId})`} />
+      <path d={linePath} fill="none" stroke={colour} strokeWidth="1.5" />
+      <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r="2.5" fill={colour} />
+    </svg>
+  )
+}
+
 function formatTime(minutes: number): string {
   if (minutes < 60) return `${minutes}m`
   const h = Math.floor(minutes / 60)
@@ -53,11 +89,50 @@ export default function Stats() {
     { key: 'films' as const, colour: 'bg-blue-400',    label: 'Movies'   },
   ]
 
+  const parseMonth = (m: string) => {
+    const [y, mo] = m.split('-')
+    return new Date(Number(y), Number(mo) - 1).toLocaleString('default', { month: 'short' })
+  }
+  const firstMonth = monthlyActivity.length > 0 ? parseMonth(monthlyActivity[0].month) : ''
+  const lastMonth  = monthlyActivity.length > 0 ? parseMonth(monthlyActivity[monthlyActivity.length - 1].month) : ''
+
   const typeCards = [
-    { label: 'Movies',   total: s.films.total,    detail: `${s.films.this_month} this month`,          sub: s.films.avg_rating ? `Avg ${s.films.avg_rating.toFixed(1)} / 10` : null, colour: 'text-blue-400' },
-    { label: 'TV Shows', total: s.tv_shows.total,  detail: `${s.tv_shows.in_progress} in progress`,    sub: s.tv_shows.episodes_this_month > 0 ? `${s.tv_shows.episodes_this_month} eps this month` : null, colour: 'text-purple-400' },
-    { label: 'Books',    total: s.books.total,     detail: `${s.books.in_progress} in progress`,       sub: s.books.chapters_this_month > 0 ? `${s.books.chapters_this_month} ch this month` : null, colour: 'text-emerald-400' },
-    { label: 'Anime',   total: s.anime.total,     detail: `${s.anime.in_progress} in progress`,       sub: s.anime.episodes_this_month > 0 ? `${s.anime.episodes_this_month} eps this month` : null, colour: 'text-pink-400' },
+    {
+      label: 'Movies',
+      total: s.films.total,
+      sub: s.films.avg_rating ? `Avg ${s.films.avg_rating.toFixed(1)}/10` : 'No ratings yet',
+      highlight: s.films.this_month > 0 ? `+${s.films.this_month} this month` : 'no activity',
+      colour: 'text-blue-400',
+      hex: '#60a5fa',
+      sparkData: monthlyActivity.map(m => m.films),
+    },
+    {
+      label: 'TV',
+      total: s.tv_shows.total,
+      sub: `${s.tv_shows.in_progress} in progress`,
+      highlight: s.tv_shows.episodes_this_month > 0 ? `${s.tv_shows.episodes_this_month} eps this month` : 'no activity',
+      colour: 'text-pink-400',
+      hex: '#f472b6',
+      sparkData: monthlyActivity.map(m => m.tv),
+    },
+    {
+      label: 'Books',
+      total: s.books.total,
+      sub: `${s.books.in_progress} in progress`,
+      highlight: s.books.chapters_this_month > 0 ? `${s.books.chapters_this_month} ch this month` : 'no activity',
+      colour: 'text-emerald-400',
+      hex: '#34d399',
+      sparkData: monthlyActivity.map(m => m.books),
+    },
+    {
+      label: 'Anime',
+      total: s.anime.total,
+      sub: `${s.anime.in_progress} in progress`,
+      highlight: s.anime.episodes_this_month > 0 ? `${s.anime.episodes_this_month} eps this month` : 'no activity',
+      colour: 'text-purple-400',
+      hex: '#c084fc',
+      sparkData: monthlyActivity.map(m => m.anime),
+    },
   ]
 
   return (
@@ -96,16 +171,27 @@ export default function Stats() {
         </div>
       </div>
 
-      {/* Per-type cards */}
+      {/* Per-type cards with sparklines */}
       <div className="grid grid-cols-2 gap-3">
-        {typeCards.map(({ label, total, detail, sub, colour }) => (
-          <div key={label} className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-2">
-            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{label}</p>
-            <p className={`text-3xl font-bold tabular-nums ${colour}`}>{total}</p>
-            <div className="space-y-0.5">
-              <p className="text-xs text-zinc-500">{detail}</p>
-              {sub && <p className="text-xs text-zinc-600">{sub}</p>}
+        {typeCards.map(({ label, total, sub, highlight, colour, hex, sparkData }) => (
+          <div key={label} className="bg-[#1a1a1a] rounded-xl ring-1 ring-white/[0.06] overflow-hidden">
+            <div className="px-4 pt-4 pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">{label}</p>
+                <p className={`text-3xl font-bold tabular-nums leading-none ${colour}`}>{total}</p>
+              </div>
+              <div className="flex items-center justify-between mt-1.5 gap-1">
+                <p className="text-xs text-zinc-500 truncate">{sub}</p>
+                <p className="text-xs text-emerald-400 whitespace-nowrap">{highlight}</p>
+              </div>
             </div>
+            <Sparkline data={sparkData} colour={hex} id={label} />
+            {firstMonth && (
+              <div className="flex justify-between px-4 pb-3 -mt-1">
+                <span className="text-[10px] text-zinc-600">{firstMonth}</span>
+                <span className="text-[10px] text-zinc-600">{lastMonth}</span>
+              </div>
+            )}
           </div>
         ))}
       </div>
