@@ -269,7 +269,7 @@ export default function Stats() {
             <div className="px-4 pt-4 pb-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">{label}</p>
-                <p className={`text-3xl font-bold tabular-nums leading-none ${colour}`}>{total}</p>
+                <p className={`text-2xl font-bold tabular-nums leading-none ${colour}`}>{total}</p>
               </div>
               <div className="flex items-center justify-between mt-1.5 gap-1">
                 <p className="text-xs text-zinc-500 truncate">{sub}</p>
