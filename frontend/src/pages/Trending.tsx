@@ -158,9 +158,10 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
         poster_url: item.poster || undefined,
         status: 'want_to',
       })
+      const prefix = { film: 'films', tv_show: 'tv', book: 'books', anime: 'anime' }[created.media_type] ?? 'films'
       show(`"${item.title}" added`, 'success')
       onClose()
-      navigate(`/media/${created.id}`)
+      navigate(`/${prefix}/${created.id}`)
     } catch (err: unknown) {
       const s = (err as { response?: { status?: number } })?.response?.status
       if (s === 409) {
@@ -199,7 +200,11 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
           {/* Add / already in library */}
           {existing ? (
             <button
-              onClick={() => { onClose(); navigate(`/media/${existing.id}`) }}
+              onClick={() => {
+                const prefix = { film: 'films', tv_show: 'tv', book: 'books', anime: 'anime' }[existing.media_type] ?? 'films'
+                onClose()
+                navigate(`/${prefix}/${existing.id}`)
+              }}
               className="w-full py-2.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-sm font-medium rounded-lg transition-colors"
             >
               Already in your library →
