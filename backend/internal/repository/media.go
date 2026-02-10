@@ -557,11 +557,21 @@ func (r *MediaRepo) GetSummary(ctx context.Context, userID int) (*StatsSummary, 
 	}
 
 	// Estimated time (minutes): films×110 + tv eps×42 + anime eps×24
+	// Single JOIN across tv_episode_logs — previously joined twice (TV + anime separately).
 	err = r.db.QueryRow(ctx, `
-		SELECT
-			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'film' AND status = 'completed') * 110 +
-			(SELECT COUNT(*) FROM tv_episode_logs e JOIN media_items m ON m.id = e.media_item_id WHERE m.user_id = $1 AND m.media_type = 'tv_show') * 42 +
-			(SELECT COUNT(*) FROM tv_episode_logs e JOIN media_items m ON m.id = e.media_item_id WHERE m.user_id = $1 AND m.media_type = 'anime') * 24
+		WITH film_mins AS (
+			SELECT COUNT(*) * 110 AS mins
+			FROM media_items
+			WHERE user_id = $1 AND media_type = 'film' AND status = 'completed'
+		),
+		episode_mins AS (
+			SELECT COALESCE(SUM(CASE WHEN m.media_type = 'tv_show' THEN 42 ELSE 24 END), 0) AS mins
+			FROM tv_episode_logs e
+			JOIN media_items m ON m.id = e.media_item_id
+			WHERE m.user_id = $1 AND m.media_type IN ('tv_show', 'anime')
+		)
+		SELECT film_mins.mins + episode_mins.mins
+		FROM film_mins, episode_mins
 	`, userID).Scan(&s.EstimatedMinutes)
 	if err != nil {
 		return nil, err
