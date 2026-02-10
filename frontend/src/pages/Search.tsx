@@ -30,6 +30,10 @@ function friendlyMeta(result: SearchResult): string {
     if (Array.isArray(authors) && authors.length > 0) {
       parts.push(authors.slice(0, 2).join(', '))
     }
+    const publisher = result.extra?.publisher
+    if (typeof publisher === 'string' && publisher) parts.push(publisher)
+    const pages = result.extra?.page_count
+    if (typeof pages === 'number' && pages > 0) parts.push(`${pages} pages`)
   }
   if (result.media_type === 'anime' || result.media_type === 'tv_show') {
     const episodes = result.extra?.episodes
