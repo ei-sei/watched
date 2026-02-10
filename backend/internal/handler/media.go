@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -824,7 +825,9 @@ func (h *MediaHandler) autoUpdateEpisodeStatus(ctx context.Context, item *models
 	}
 
 	if changed {
-		h.media.Update(ctx, item.ID, userID, upd) //nolint:errcheck
+		if _, err := h.media.Update(ctx, item.ID, userID, upd); err != nil {
+			log.Printf("autoUpdateEpisodeStatus: update item %d: %v", item.ID, err)
+		}
 	}
 }
 
@@ -858,6 +861,8 @@ func (h *MediaHandler) autoUpdateChapterStatus(ctx context.Context, item *models
 	}
 
 	if changed {
-		h.media.Update(ctx, item.ID, userID, upd) //nolint:errcheck
+		if _, err := h.media.Update(ctx, item.ID, userID, upd); err != nil {
+			log.Printf("autoUpdateChapterStatus: update item %d: %v", item.ID, err)
+		}
 	}
 }
