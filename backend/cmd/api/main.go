@@ -157,8 +157,10 @@ func main() {
 		r.Post("/import/mal", importH.ImportMAL)
 		r.Post("/import/letterboxd", importH.ImportLetterboxd)
 		r.Post("/import/goodreads", importH.ImportGoodreads)
-		r.Get("/import/posters/missing-count", importH.MissingPosterCount)
-		r.Post("/import/posters/refetch", importH.RefetchPosters)
+		r.Get("/import/posters/missing-count", importH.MissingPosterCount) // legacy
+		r.Post("/import/posters/refetch", importH.RefetchPosters)          // legacy
+		r.Get("/import/metadata/missing-count", importH.MissingMetadataCount)
+		r.Post("/import/metadata/refetch", importH.RefetchMetadata)
 
 		// Admin
 		r.Group(func(r chi.Router) {

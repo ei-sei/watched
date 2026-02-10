@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -202,6 +203,8 @@ type UpdateMediaInput struct {
 	CurrentProgress *int
 	TotalProgress   *int
 	Metadata        map[string]any
+	Year            *int
+	PosterURL       *string
 }
 
 func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaInput) (*models.MediaItem, error) {
@@ -243,6 +246,14 @@ func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaIn
 	if in.Metadata != nil {
 		args = append(args, in.Metadata)
 		sets = append(sets, fmt.Sprintf("metadata = $%d", len(args)))
+	}
+	if in.Year != nil {
+		args = append(args, *in.Year)
+		sets = append(sets, fmt.Sprintf("year = $%d", len(args)))
+	}
+	if in.PosterURL != nil {
+		args = append(args, *in.PosterURL)
+		sets = append(sets, fmt.Sprintf("poster_url = $%d", len(args)))
 	}
 
 	query := fmt.Sprintf(
@@ -288,6 +299,58 @@ func (r *MediaRepo) GetAnimeMissingPosters(ctx context.Context, userID int) ([]M
 		var item MissingPosterItem
 		if err := rows.Scan(&item.ID, &item.MalID); err != nil {
 			continue
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+// MissingMetadataItem is returned by GetMissingMetadata.
+type MissingMetadataItem struct {
+	ID            int
+	UserID        int
+	MediaType     string
+	Title         string
+	Year          *int
+	PosterURL     *string
+	ExternalID    *string
+	Metadata      map[string]any
+	TotalProgress *int
+}
+
+func (m *MissingMetadataItem) IsPosterMissing() bool { return m.PosterURL == nil }
+
+// GetMissingMetadata returns all items for a user that are missing a poster,
+// a year, or (for episodic/book types) a total_progress value.
+func (r *MediaRepo) GetMissingMetadata(ctx context.Context, userID int) ([]MissingMetadataItem, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT id, user_id, media_type, title, year, poster_url, external_id, metadata, total_progress
+		 FROM media_items
+		 WHERE user_id = $1
+		   AND (
+		         poster_url IS NULL
+		      OR year IS NULL
+		      OR (media_type IN ('anime', 'tv_show', 'book') AND total_progress IS NULL)
+		   )`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get missing metadata: %w", err)
+	}
+	defer rows.Close()
+
+	var out []MissingMetadataItem
+	for rows.Next() {
+		var item MissingMetadataItem
+		var metaBytes []byte
+		if err := rows.Scan(
+			&item.ID, &item.UserID, &item.MediaType, &item.Title,
+			&item.Year, &item.PosterURL, &item.ExternalID, &metaBytes, &item.TotalProgress,
+		); err != nil {
+			continue
+		}
+		if metaBytes != nil {
+			_ = json.Unmarshal(metaBytes, &item.Metadata)
 		}
 		out = append(out, item)
 	}
