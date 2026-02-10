@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -94,13 +95,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			t := time.Now().Add(15 * time.Minute)
 			lockUntil = &t
 		}
-		_ = h.users.UpdateLoginFail(ctx, user.ID, attempts, lockUntil)
+		if err := h.users.UpdateLoginFail(ctx, user.ID, attempts, lockUntil); err != nil {
+			log.Printf("UpdateLoginFail user %d: %v", user.ID, err)
+		}
 		jsonErr(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	// Reset failed attempts on success
-	_ = h.users.UpdateLoginFail(ctx, user.ID, 0, nil)
+	if err := h.users.UpdateLoginFail(ctx, user.ID, 0, nil); err != nil {
+		log.Printf("UpdateLoginFail reset user %d: %v", user.ID, err)
+	}
 
 	access, err := auth.NewAccessToken(h.cfg.JWTSecret, user.ID, user.IsAdmin, user.IsPremium)
 	if err != nil {
