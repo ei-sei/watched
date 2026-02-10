@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -170,7 +171,9 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 		}
 
 		if rating != nil && created != nil {
-			_, _ = h.media.Update(ctx, created.ID, userID, repository.UpdateMediaInput{Rating: rating})
+			if _, err := h.media.Update(ctx, created.ID, userID, repository.UpdateMediaInput{Rating: rating}); err != nil {
+				log.Printf("import anime: set rating for item %d: %v", created.ID, err)
+			}
 		}
 
 		if created != nil {
@@ -180,11 +183,15 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			switch status {
 			case models.StatusCompleted:
 				if a.Episodes > 0 {
-					_ = h.episodes.BulkInsertWatched(ctx, created.ID, 1, a.Episodes, completedAt)
+					if err := h.episodes.BulkInsertWatched(ctx, created.ID, 1, a.Episodes, completedAt); err != nil {
+						log.Printf("import anime: bulk insert episodes for item %d: %v", created.ID, err)
+					}
 				}
 			case models.StatusInProgress:
 				if a.Watched > 0 {
-					_ = h.episodes.BulkInsertWatched(ctx, created.ID, 1, a.Watched, startedAt)
+					if err := h.episodes.BulkInsertWatched(ctx, created.ID, 1, a.Watched, startedAt); err != nil {
+						log.Printf("import anime: bulk insert episodes for item %d: %v", created.ID, err)
+					}
 				}
 			}
 
@@ -336,7 +343,9 @@ func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
 			poster = h.jikanPoster(ctx, item.malID)
 		}
 		if poster != nil {
-			_ = h.media.SetPoster(ctx, item.id, *poster)
+			if err := h.media.SetPoster(ctx, item.id, *poster); err != nil {
+				log.Printf("enrichPosters: set poster for item %d: %v", item.id, err)
+			}
 		}
 		time.Sleep(700 * time.Millisecond)
 	}
@@ -366,10 +375,14 @@ func (h *ImportHandler) enrichTitles(ctx context.Context, items []enrichItem) {
 	for i := 0; i < len(malIDs); i += batchSize {
 		batch := malIDs[i:min(i+batchSize, len(malIDs))]
 
-		payload, _ := json.Marshal(map[string]any{
+		payload, err := json.Marshal(map[string]any{
 			"query":     `query($ids:[Int]){Page(perPage:50){media(idMal_in:$ids,type:ANIME){idMal title{romaji english}}}}`,
 			"variables": map[string]any{"ids": batch},
 		})
+		if err != nil {
+			log.Printf("enrichTitles: marshal batch payload: %v", err)
+			continue
+		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(string(payload)))
 		if err != nil {
 			continue
@@ -424,10 +437,12 @@ func (h *ImportHandler) enrichTitles(ctx context.Context, items []enrichItem) {
 			meta["title_romaji"] = m.Title.Romaji
 
 			title := english
-			_, _ = h.media.Update(ctx, dbID, userID, repository.UpdateMediaInput{
+			if _, err := h.media.Update(ctx, dbID, userID, repository.UpdateMediaInput{
 				Title:    &title,
 				Metadata: meta,
-			})
+			}); err != nil {
+				log.Printf("enrichTitles: update item %d: %v", dbID, err)
+			}
 		}
 
 		// Stay within AniList's 90 req/min rate limit
@@ -449,7 +464,9 @@ func (h *ImportHandler) enrichFilmPosters(ctx context.Context, items []filmEnric
 	}
 	for _, item := range items {
 		if poster := h.tmdbPoster(ctx, item.title, item.year); poster != nil {
-			_ = h.media.SetPoster(ctx, item.id, *poster)
+			if err := h.media.SetPoster(ctx, item.id, *poster); err != nil {
+				log.Printf("enrichFilmPosters: set poster for item %d: %v", item.id, err)
+			}
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -495,7 +512,9 @@ type bookEnrichItem struct {
 func (h *ImportHandler) enrichBookPosters(ctx context.Context, items []bookEnrichItem) {
 	for _, item := range items {
 		if poster := h.googleBooksPoster(ctx, item.title); poster != nil {
-			_ = h.media.SetPoster(ctx, item.id, *poster)
+			if err := h.media.SetPoster(ctx, item.id, *poster); err != nil {
+				log.Printf("enrichBookPosters: set poster for item %d: %v", item.id, err)
+			}
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
@@ -619,7 +638,9 @@ func (h *ImportHandler) enrichAnimeMeta(ctx context.Context, item repository.Mis
 	}
 
 	if in.PosterURL != nil || in.TotalProgress != nil {
-		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+		if _, err := h.media.Update(ctx, item.ID, item.UserID, in); err != nil {
+			log.Printf("enrichAnimeMeta: update item %d: %v", item.ID, err)
+		}
 	}
 }
 
@@ -646,7 +667,9 @@ func (h *ImportHandler) enrichFilmMeta(ctx context.Context, item repository.Miss
 		in.Year = year
 	}
 	if in.PosterURL != nil || in.Year != nil {
-		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+		if _, err := h.media.Update(ctx, item.ID, item.UserID, in); err != nil {
+			log.Printf("enrichFilmMeta: update item %d: %v", item.ID, err)
+		}
 	}
 }
 
@@ -677,7 +700,9 @@ func (h *ImportHandler) enrichTVMeta(ctx context.Context, item repository.Missin
 		in.TotalProgress = episodes
 	}
 	if in.PosterURL != nil || in.Year != nil || in.TotalProgress != nil {
-		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+		if _, err := h.media.Update(ctx, item.ID, item.UserID, in); err != nil {
+			log.Printf("enrichTVMeta: update item %d: %v", item.ID, err)
+		}
 	}
 }
 
@@ -705,7 +730,9 @@ func (h *ImportHandler) enrichBookMeta(ctx context.Context, item repository.Miss
 		in.TotalProgress = pages
 	}
 	if in.PosterURL != nil || in.Year != nil || in.TotalProgress != nil {
-		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+		if _, err := h.media.Update(ctx, item.ID, item.UserID, in); err != nil {
+			log.Printf("enrichBookMeta: update item %d: %v", item.ID, err)
+		}
 	}
 }
 
@@ -1079,7 +1106,9 @@ func (h *ImportHandler) ImportLetterboxd(w http.ResponseWriter, r *http.Request)
 		}
 
 		if rating != nil && created != nil {
-			_, _ = h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating})
+			if _, err := h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating}); err != nil {
+				log.Printf("import: set rating for item %d: %v", created.ID, err)
+			}
 		}
 
 		if created != nil {
@@ -1238,7 +1267,9 @@ func (h *ImportHandler) ImportGoodreads(w http.ResponseWriter, r *http.Request) 
 		}
 
 		if rating != nil && created != nil {
-			_, _ = h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating})
+			if _, err := h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating}); err != nil {
+				log.Printf("import: set rating for item %d: %v", created.ID, err)
+			}
 		}
 
 		if created != nil {
