@@ -77,13 +77,6 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 
 	whereClause := strings.Join(where, " AND ")
 
-	var total int
-	if err := r.db.QueryRow(ctx,
-		"SELECT COUNT(*) FROM media_items WHERE "+whereClause, args...,
-	).Scan(&total); err != nil {
-		return nil, err
-	}
-
 	// Whitelist sort columns to prevent SQL injection
 	allowedSort := map[string]string{
 		"created_at": "created_at",
@@ -106,17 +99,22 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 		nullsClause = " NULLS LAST"
 	}
 
-	var query string
+	var (
+		query string
+		total int
+	)
 	if f.NoLimit {
+		// No pagination — skip COUNT entirely; derive total from result length.
 		query = fmt.Sprintf(
 			`SELECT %s FROM media_items WHERE %s ORDER BY %s %s%s`,
 			mediaColumns, whereClause, sortCol, sortDir, nullsClause,
 		)
 	} else {
+		// Use COUNT(*) OVER() to get total and rows in a single roundtrip.
 		offset := (f.Page - 1) * f.PerPage
 		args = append(args, f.PerPage, offset)
 		query = fmt.Sprintf(
-			`SELECT %s FROM media_items WHERE %s ORDER BY %s %s%s LIMIT $%d OFFSET $%d`,
+			`SELECT %s, COUNT(*) OVER() FROM media_items WHERE %s ORDER BY %s %s%s LIMIT $%d OFFSET $%d`,
 			mediaColumns, whereClause, sortCol, sortDir, nullsClause, len(args)-1, len(args),
 		)
 	}
@@ -130,10 +128,22 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 	items := make([]models.MediaItem, 0)
 	for rows.Next() {
 		m := models.MediaItem{}
-		if err := scanMediaFields(&m, rows.Scan); err != nil {
-			return nil, err
+		if f.NoLimit {
+			if err := scanMediaFields(&m, rows.Scan); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := scanMediaFields(&m, func(dest ...any) error {
+				return rows.Scan(append(dest, &total)...)
+			}); err != nil {
+				return nil, err
+			}
 		}
 		items = append(items, m)
+	}
+
+	if f.NoLimit {
+		total = len(items)
 	}
 
 	pages := 1
