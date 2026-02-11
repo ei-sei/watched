@@ -64,7 +64,10 @@ func (h *RewatchHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StartedAt  *string `json:"started_at"`
 		FinishedAt *string `json:"finished_at"`
 	}
-	_ = decode(r, &body)
+	if err := decode(r, &body); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
 	rw, err := h.rewatches.Create(r.Context(), userID, id, body.StartedAt, body.FinishedAt)
 	if err != nil {
