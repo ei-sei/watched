@@ -360,7 +360,9 @@ func (r *MediaRepo) GetMissingMetadata(ctx context.Context, userID int) ([]Missi
 			continue
 		}
 		if metaBytes != nil {
-			_ = json.Unmarshal(metaBytes, &item.Metadata)
+			if err := json.Unmarshal(metaBytes, &item.Metadata); err != nil {
+				return nil, fmt.Errorf("unmarshal metadata for item %d: %w", item.ID, err)
+			}
 		}
 		out = append(out, item)
 	}
