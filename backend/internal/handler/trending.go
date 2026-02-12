@@ -121,7 +121,10 @@ func (h *TrendingHandler) fetchTMDB(ctx context.Context, mediaType string) ([]Tr
 		"https://api.themoviedb.org/3/trending/%s/week?api_key=%s&language=en-US",
 		mediaType, h.cfg.TMDBKey,
 	)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("tmdb trending: build request: %w", err)
+	}
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -222,8 +225,14 @@ func (h *TrendingHandler) fetchAniList(ctx context.Context) ([]TrendingSection, 
 		}
 	}`, curSeason, curYear, nxtSeason, nxtYear)
 
-	payload, _ := json.Marshal(map[string]string{"query": query})
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", bytes.NewReader(payload))
+	payload, err := json.Marshal(map[string]string{"query": query})
+	if err != nil {
+		return nil, fmt.Errorf("anilist trending: marshal payload: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("anilist trending: build request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 

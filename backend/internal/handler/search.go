@@ -140,7 +140,10 @@ func (h *SearchHandler) searchTMDB(ctx context.Context, q string) ([]models.Sear
 	u := fmt.Sprintf("https://api.themoviedb.org/3/search/multi?api_key=%s&query=%s&language=en-US",
 		h.cfg.TMDBKey, url.QueryEscape(q))
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("tmdb: build request: %w", err)
+	}
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -211,7 +214,10 @@ func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]mode
 	u := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&limit=10&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median,publisher",
 		url.QueryEscape(q))
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("openlibrary: build request: %w", err)
+	}
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -266,7 +272,10 @@ func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]mode
 		apiURL += "&key=" + h.cfg.GoogleBooksKey
 	}
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("google books: build request: %w", err)
+	}
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -335,7 +344,10 @@ func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]mode
 func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.SearchResult, error) {
 	u := fmt.Sprintf("https://api.jikan.moe/v4/anime?q=%s&limit=20&sfw=false", url.QueryEscape(q))
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("jikan: build request: %w", err)
+	}
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -410,11 +422,17 @@ func (h *SearchHandler) searchAnime(ctx context.Context, q string) ([]models.Sea
 }
 
 func (h *SearchHandler) searchAniList(ctx context.Context, q string) ([]models.SearchResult, error) {
-	payload, _ := json.Marshal(map[string]any{
+	payload, err := json.Marshal(map[string]any{
 		"query": `query($s:String){Page(page:1,perPage:20){media(search:$s,type:ANIME,sort:SEARCH_MATCH){id idMal title{romaji english} episodes coverImage{large} averageScore description startDate{year}}}}`,
 		"variables": map[string]string{"s": q},
 	})
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(string(payload)))
+	if err != nil {
+		return nil, fmt.Errorf("anilist: marshal payload: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(string(payload)))
+	if err != nil {
+		return nil, fmt.Errorf("anilist: build request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	resp, err := h.client.Do(req)
