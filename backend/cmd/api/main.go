@@ -21,7 +21,9 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("warning: .env load failed: %v", err)
+	}
 
 	cfg := config.Load()
 
@@ -191,7 +193,7 @@ func main() {
 		}
 	}()
 
-	// Background job: auto-move stale in_progress items to on_hold every 6 hours
+	// Background job: auto-move stale in_progress items to on_hold every 7 days
 	go func() {
 		ticker := time.NewTicker(7 * 24 * time.Hour)
 		defer ticker.Stop()

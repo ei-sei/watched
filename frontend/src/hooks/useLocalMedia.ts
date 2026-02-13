@@ -5,17 +5,20 @@ import type { MediaListParams } from '@/types/api'
 
 export function useLocalMediaList(params: MediaListParams) {
   return useLiveQuery(async () => {
-    // Base collection filtered by type index when available
+    // Use the most selective index available to avoid loading the full table.
     let items: MediaItem[]
-    if (params.media_type) {
+    if (params.media_type && params.status) {
+      // Compound index — pushes both filters into IndexedDB
+      items = await db.mediaItems
+        .where('[media_type+status]')
+        .equals([params.media_type, params.status])
+        .toArray()
+    } else if (params.media_type) {
       items = await db.mediaItems.where('media_type').equals(params.media_type).toArray()
+    } else if (params.status) {
+      items = await db.mediaItems.where('status').equals(params.status).toArray()
     } else {
       items = await db.mediaItems.toArray()
-    }
-
-    // Status filter
-    if (params.status) {
-      items = items.filter((i) => i.status === params.status)
     }
 
     // Text search on title + romaji alternative title

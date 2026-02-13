@@ -26,6 +26,11 @@ class WatchedDB extends Dexie {
       episodeLogs: 'id, media_item_id, [media_item_id+season_number+episode_number]',
       chapterLogs: 'id, media_item_id, [media_item_id+chapter_number]',
     })
+    this.version(3).stores({
+      // Add compound index so status can be pushed into IndexedDB when both
+      // media_type and status filters are active, avoiding a full JS filter.
+      mediaItems: 'id, media_type, status, title, updated_at, [media_type+status]',
+    })
   }
 }
 

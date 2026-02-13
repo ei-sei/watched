@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/ei-sei/brsti/internal/models"
@@ -158,7 +159,11 @@ func (r *ChapterRepo) BulkUpsert(ctx context.Context, mediaItemID int, inputs []
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			log.Printf("BulkUpsert chapters: rollback: %v", err)
+		}
+	}()
 
 	count := 0
 	for _, in := range inputs {

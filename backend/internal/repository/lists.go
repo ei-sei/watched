@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/ei-sei/brsti/internal/models"
@@ -169,7 +170,11 @@ func (r *ListRepo) ReorderItems(ctx context.Context, listID int, orderedItemIDs 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			log.Printf("ReorderItems: rollback: %v", err)
+		}
+	}()
 
 	for pos, itemID := range orderedItemIDs {
 		if _, err := tx.Exec(ctx,

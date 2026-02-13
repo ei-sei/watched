@@ -341,7 +341,8 @@ func (r *MediaRepo) GetMissingMetadata(ctx context.Context, userID int) ([]Missi
 		         poster_url IS NULL
 		      OR year IS NULL
 		      OR (media_type IN ('anime', 'tv_show', 'book') AND total_progress IS NULL)
-		   )`,
+		   )
+		 LIMIT 100`,
 		userID,
 	)
 	if err != nil {

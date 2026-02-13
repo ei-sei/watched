@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/ei-sei/brsti/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -101,7 +102,11 @@ func (r *EpisodeRepo) SetSeasonProgress(ctx context.Context, mediaItemID, season
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			log.Printf("SetSeasonProgress: rollback: %v", err)
+		}
+	}()
 
 	// Delete episodes above the new count
 	if _, err = tx.Exec(ctx,

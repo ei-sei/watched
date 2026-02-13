@@ -40,18 +40,23 @@ type tmdbTVData struct {
 	Seasons       []map[string]any
 }
 
-// fetchAiredCount returns the number of episodes aired so far using the AniList
-// GraphQL API (free, no auth). A single request is enough: for airing anime,
-// nextAiringEpisode.episode is the NEXT episode, so latest aired = that - 1.
-// AniList accepts MAL IDs via the idMal field.
-func (h *MediaHandler) fetchAiredCount(ctx context.Context, malID string) int {
+// anilistEpisodeData holds the combined episode data returned from AniList.
+type anilistEpisodeData struct {
+	Total *int // total episodes (nil for ongoing series)
+	Aired int  // episodes aired so far (== Total when finished)
+}
+
+// fetchAniListEpisodeData queries AniList for both total episodes and the
+// currently-airing episode, consolidating what were previously two separate
+// requests (fetchAiredCount + fetchAniListData).
+func (h *MediaHandler) fetchAniListEpisodeData(ctx context.Context, malID string) *anilistEpisodeData {
 	body := fmt.Sprintf(
 		`{"query":"query($id:Int){Media(idMal:$id,type:ANIME){episodes nextAiringEpisode{episode}}}","variables":{"id":%s}}`,
 		malID,
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(body))
 	if err != nil {
-		return 0
+		return nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.client.Do(req)
@@ -59,12 +64,12 @@ func (h *MediaHandler) fetchAiredCount(ctx context.Context, malID string) int {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		return 0
+		return nil
 	}
 	defer resp.Body.Close()
-	var result struct {
+	var raw struct {
 		Data struct {
-			Media struct {
+			Media *struct {
 				Episodes          *int `json:"episodes"`
 				NextAiringEpisode *struct {
 					Episode int `json:"episode"`
@@ -72,15 +77,23 @@ func (h *MediaHandler) fetchAiredCount(ctx context.Context, malID string) int {
 			} `json:"Media"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || raw.Data.Media == nil {
+		return nil
 	}
-	m := result.Data.Media
+	m := raw.Data.Media
+	d := &anilistEpisodeData{Total: m.Episodes}
 	if m.NextAiringEpisode != nil {
-		return m.NextAiringEpisode.Episode - 1
+		d.Aired = m.NextAiringEpisode.Episode - 1
+	} else if m.Episodes != nil {
+		d.Aired = *m.Episodes
 	}
-	if m.Episodes != nil {
-		return *m.Episodes
+	return d
+}
+
+// fetchAiredCount returns episodes aired so far for an airing anime.
+func (h *MediaHandler) fetchAiredCount(ctx context.Context, malID string) int {
+	if d := h.fetchAniListEpisodeData(ctx, malID); d != nil {
+		return d.Aired
 	}
 	return 0
 }
@@ -94,33 +107,16 @@ func (h *MediaHandler) fetchAnimeData(ctx context.Context, malID string) *tmdbTV
 }
 
 func (h *MediaHandler) fetchAniListData(ctx context.Context, malID string) *tmdbTVData {
-	body := fmt.Sprintf(`{"query":"query($id:Int){Media(idMal:$id,type:ANIME){episodes}}","variables":{"id":%s}}`, malID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(body))
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := h.client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil
-	}
-	defer resp.Body.Close()
-	var raw struct {
-		Data struct {
-			Media *struct {
-				Episodes *int `json:"episodes"`
-			} `json:"Media"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || raw.Data.Media == nil {
+	d := h.fetchAniListEpisodeData(ctx, malID)
+	if d == nil {
 		return nil
 	}
 	episodeCount := 0
-	if raw.Data.Media.Episodes != nil && *raw.Data.Media.Episodes > 0 {
-		episodeCount = *raw.Data.Media.Episodes
+	if d.Total != nil && *d.Total > 0 {
+		episodeCount = *d.Total
 	}
 	return &tmdbTVData{
-		TotalEpisodes: raw.Data.Media.Episodes,
+		TotalEpisodes: d.Total,
 		Seasons:       []map[string]any{{"season_number": 1, "episode_count": episodeCount}},
 	}
 }
@@ -196,19 +192,16 @@ func userIDFrom(r *http.Request) int {
 	return auth.ClaimsFrom(r.Context()).UserID
 }
 
-// parseMalID extracts the numeric ID from a "mal:12345" external ID.
-// Returns ("", false) if the value is not a MAL id.
-func parseMalID(externalID string) (string, bool) {
-	id := strings.TrimPrefix(externalID, "mal:")
+// parseExternalID extracts the value from a "prefix:value" external ID string.
+// Returns ("", false) if the prefix is not present.
+func parseExternalID(externalID, prefix string) (string, bool) {
+	p := prefix + ":"
+	id := strings.TrimPrefix(externalID, p)
 	return id, id != externalID
 }
 
-// parseTMDBID extracts the numeric ID from a "tmdb:12345" external ID.
-// Returns ("", false) if the value is not a TMDB id.
-func parseTMDBID(externalID string) (string, bool) {
-	id := strings.TrimPrefix(externalID, "tmdb:")
-	return id, id != externalID
-}
+func parseMalID(externalID string) (string, bool)  { return parseExternalID(externalID, "mal") }
+func parseTMDBID(externalID string) (string, bool) { return parseExternalID(externalID, "tmdb") }
 
 // GET /media
 func (h *MediaHandler) List(w http.ResponseWriter, r *http.Request) {

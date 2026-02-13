@@ -68,11 +68,18 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	close(results)
 
 	var all []models.SearchResult
+	sourced, errored := 0, 0
 	for res := range results {
+		sourced++
 		if res.err != nil {
+			errored++
 			continue
 		}
 		all = append(all, res.items...)
+	}
+	if sourced > 0 && errored == sourced {
+		jsonErr(w, http.StatusBadGateway, "all upstream search sources failed")
+		return
 	}
 	if all == nil {
 		all = []models.SearchResult{}
@@ -87,45 +94,20 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	//    author matches a Google Books entry — Google Books has richer metadata
 	//    (descriptions, page counts).
 	if mediaType == "" || mediaType == string(models.MediaTypeTVShow) || mediaType == string(models.MediaTypeAnime) {
-		animeTitles := make(map[string]struct{})
-		for _, r := range all {
-			if r.Source == "jikan" || r.Source == "anilist" {
-				animeTitles[normTitle(r.Title)] = struct{}{}
-			}
-		}
-		if len(animeTitles) > 0 {
-			filtered := all[:0]
-			for _, r := range all {
-				if r.Source == "tmdb" && r.MediaType == string(models.MediaTypeTVShow) {
-					if _, dup := animeTitles[normTitle(r.Title)]; dup {
-						continue
-					}
-				}
-				filtered = append(filtered, r)
-			}
-			all = filtered
-		}
+		all = dedupResults(all,
+			func(r models.SearchResult) bool { return r.Source == "jikan" || r.Source == "anilist" },
+			func(r models.SearchResult) bool {
+				return r.Source == "tmdb" && r.MediaType == string(models.MediaTypeTVShow)
+			},
+			func(r models.SearchResult) string { return normTitle(r.Title) },
+		)
 	}
 	if mediaType == "" || mediaType == string(models.MediaTypeBook) {
-		// Build a set of "title|firstAuthor" keys from Google Books results.
-		gbKeys := make(map[string]struct{})
-		for _, r := range all {
-			if r.Source == "googlebooks" {
-				gbKeys[bookKey(r)] = struct{}{}
-			}
-		}
-		if len(gbKeys) > 0 {
-			filtered := all[:0]
-			for _, r := range all {
-				if r.Source == "openlibrary" {
-					if _, dup := gbKeys[bookKey(r)]; dup {
-						continue
-					}
-				}
-				filtered = append(filtered, r)
-			}
-			all = filtered
-		}
+		all = dedupResults(all,
+			func(r models.SearchResult) bool { return r.Source == "googlebooks" },
+			func(r models.SearchResult) bool { return r.Source == "openlibrary" },
+			bookKey,
+		)
 	}
 
 	rankResults(all, q)
@@ -595,4 +577,32 @@ func normTitle(s string) string {
 	s = strings.ReplaceAll(s, "-", " ")
 	s = strings.Join(strings.Fields(s), " ")
 	return s
+}
+
+// dedupResults removes results where isRemove returns true and a reference
+// result (isRef) exists with the same key. Used to prefer authoritative sources.
+func dedupResults(
+	items []models.SearchResult,
+	isRef, isRemove func(models.SearchResult) bool,
+	keyFn func(models.SearchResult) string,
+) []models.SearchResult {
+	keys := make(map[string]struct{})
+	for _, r := range items {
+		if isRef(r) {
+			keys[keyFn(r)] = struct{}{}
+		}
+	}
+	if len(keys) == 0 {
+		return items
+	}
+	out := items[:0]
+	for _, r := range items {
+		if isRemove(r) {
+			if _, dup := keys[keyFn(r)]; dup {
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }

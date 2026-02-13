@@ -334,21 +334,33 @@ func (h *ImportHandler) RefetchPosters(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// applyPosters iterates over a set of item IDs, calls fetchFn to obtain a
+// poster URL for each, saves it, and sleeps between requests. Centralises the
+// repeated fetch→save→sleep pattern shared by the three poster enrichers.
+func (h *ImportHandler) applyPosters(ctx context.Context, ids []int, fetchFn func(i int) *string, sleep time.Duration) {
+	for i, id := range ids {
+		if poster := fetchFn(i); poster != nil {
+			if err := h.media.SetPoster(ctx, id, *poster); err != nil {
+				log.Printf("applyPosters item %d: %v", id, err)
+			}
+		}
+		time.Sleep(sleep)
+	}
+}
+
 // enrichPosters runs in a background goroutine after the response is sent.
 // Tries AniList first (higher rate limit), falls back to Jikan.
 func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
-	for _, item := range items {
-		poster := h.anilistPoster(ctx, item.malID)
-		if poster == nil {
-			poster = h.jikanPoster(ctx, item.malID)
-		}
-		if poster != nil {
-			if err := h.media.SetPoster(ctx, item.id, *poster); err != nil {
-				log.Printf("enrichPosters: set poster for item %d: %v", item.id, err)
-			}
-		}
-		time.Sleep(700 * time.Millisecond)
+	ids := make([]int, len(items))
+	for i, it := range items {
+		ids[i] = it.id
 	}
+	h.applyPosters(ctx, ids, func(i int) *string {
+		if p := h.anilistPoster(ctx, items[i].malID); p != nil {
+			return p
+		}
+		return h.jikanPoster(ctx, items[i].malID)
+	}, 700*time.Millisecond)
 }
 
 // enrichTitles batch-fetches English titles from AniList (50 per request) and
@@ -462,14 +474,13 @@ func (h *ImportHandler) enrichFilmPosters(ctx context.Context, items []filmEnric
 	if h.cfg.TMDBKey == "" {
 		return
 	}
-	for _, item := range items {
-		if poster := h.tmdbPoster(ctx, item.title, item.year); poster != nil {
-			if err := h.media.SetPoster(ctx, item.id, *poster); err != nil {
-				log.Printf("enrichFilmPosters: set poster for item %d: %v", item.id, err)
-			}
-		}
-		time.Sleep(300 * time.Millisecond)
+	ids := make([]int, len(items))
+	for i, it := range items {
+		ids[i] = it.id
 	}
+	h.applyPosters(ctx, ids, func(i int) *string {
+		return h.tmdbPoster(ctx, items[i].title, items[i].year)
+	}, 300*time.Millisecond)
 }
 
 func (h *ImportHandler) tmdbPoster(ctx context.Context, title string, year *int) *string {
@@ -510,14 +521,13 @@ type bookEnrichItem struct {
 }
 
 func (h *ImportHandler) enrichBookPosters(ctx context.Context, items []bookEnrichItem) {
-	for _, item := range items {
-		if poster := h.googleBooksPoster(ctx, item.title); poster != nil {
-			if err := h.media.SetPoster(ctx, item.id, *poster); err != nil {
-				log.Printf("enrichBookPosters: set poster for item %d: %v", item.id, err)
-			}
-		}
-		time.Sleep(300 * time.Millisecond)
+	ids := make([]int, len(items))
+	for i, it := range items {
+		ids[i] = it.id
 	}
+	h.applyPosters(ctx, ids, func(i int) *string {
+		return h.googleBooksPoster(ctx, items[i].title)
+	}, 300*time.Millisecond)
 }
 
 func (h *ImportHandler) googleBooksPoster(ctx context.Context, title string) *string {

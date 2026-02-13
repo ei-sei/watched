@@ -44,7 +44,7 @@ const SYNC_COOLDOWN_MS = 30_000 // 30 seconds
 /** Runs syncMedia only if more than 30 s have passed since the last sync. */
 export function syncMediaIfStale(): void {
   if (Date.now() - lastSyncAt < SYNC_COOLDOWN_MS) return
-  syncMedia().catch(console.error)
+  syncMedia().catch((err) => console.error('[sync] syncMediaIfStale failed:', err))
 }
 
 // ── Full media sync ──────────────────────────────────────────────────────────
@@ -64,6 +64,9 @@ export async function syncMedia(): Promise<void> {
         params: { per_page: perPage, page },
       })
       allItems.push(...data.items)
+      window.dispatchEvent(
+        new CustomEvent('watched:sync-progress', { detail: { page, pages: data.pages } })
+      )
       if (page >= data.pages) break
       page++
     }
@@ -129,7 +132,7 @@ export function scheduleItemRefetch(mediaId: number): void {
 
 export function registerSyncOnReconnect(): void {
   window.addEventListener('online', () => {
-    flushQueue().catch(console.error)
-    syncMedia().catch(console.error)
+    flushQueue().catch((err) => console.error('[sync] flushQueue on reconnect failed:', err))
+    syncMedia().catch((err) => console.error('[sync] syncMedia on reconnect failed:', err))
   })
 }
