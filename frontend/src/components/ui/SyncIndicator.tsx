@@ -3,6 +3,9 @@ import { useSyncStatus } from '@/hooks/useSyncStatus'
 export default function SyncIndicator() {
   const { state, pendingCount } = useSyncStatus()
 
+  // Nothing to show when idle — all is well and the last sync was a while ago
+  if (state === 'idle') return null
+
   const configs = {
     offline: {
       dot: 'bg-red-500',

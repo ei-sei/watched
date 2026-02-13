@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/offline/db'
 
-export type SyncState = 'offline' | 'pending' | 'syncing' | 'synced'
+// 'idle' = synced and nothing to show; only shown briefly after a sync finishes
+export type SyncState = 'offline' | 'pending' | 'syncing' | 'synced' | 'idle'
+
+const SYNCED_LINGER_MS = 3000 // how long "Synced" stays visible after a sync
 
 export function useSyncStatus() {
   const [online, setOnline] = useState(navigator.onLine)
   const [syncing, setSyncing] = useState(false)
+  const [justSynced, setJustSynced] = useState(false)
+  const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const pendingCount = useLiveQuery(() => db.mutationQueue.count(), [], 0) ?? 0
 
@@ -21,15 +26,23 @@ export function useSyncStatus() {
     }
   }, [])
 
-  // Listen for sync events dispatched by the sync engine
   useEffect(() => {
-    const onStart = () => setSyncing(true)
-    const onEnd   = () => setSyncing(false)
+    const onStart = () => {
+      setSyncing(true)
+      setJustSynced(false)
+      if (lingerTimer.current) clearTimeout(lingerTimer.current)
+    }
+    const onEnd = () => {
+      setSyncing(false)
+      setJustSynced(true)
+      lingerTimer.current = setTimeout(() => setJustSynced(false), SYNCED_LINGER_MS)
+    }
     window.addEventListener('watched:sync-start', onStart)
     window.addEventListener('watched:sync-end',   onEnd)
     return () => {
       window.removeEventListener('watched:sync-start', onStart)
       window.removeEventListener('watched:sync-end',   onEnd)
+      if (lingerTimer.current) clearTimeout(lingerTimer.current)
     }
   }, [])
 
@@ -39,7 +52,9 @@ export function useSyncStatus() {
     ? 'syncing'
     : pendingCount > 0
     ? 'pending'
-    : 'synced'
+    : justSynced
+    ? 'synced'
+    : 'idle'
 
   return { state, pendingCount, online }
 }
