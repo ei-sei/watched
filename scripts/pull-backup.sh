@@ -4,7 +4,7 @@ set -euo pipefail
 VPS_USER="${VPS_USER:-ubuntu}"
 VPS_HOST="${VPS_HOST:?Set VPS_HOST environment variable}"
 VPS_BACKUP_DIR="${VPS_BACKUP_DIR:-~/backups}"
-LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-$HOME/backups/watched}"
+LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/path/to/local/backup/dir}"
 KEEP_DAYS="${KEEP_DAYS:-30}"
 
 DATE=$(date +%Y%m%d)
