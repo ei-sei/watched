@@ -2,7 +2,8 @@
 set -euo pipefail
 
 VPS_USER="${VPS_USER:-ubuntu}"
-VPS_HOST="${VPS_HOST:?Set VPS_HOST environment variable}"
+VPS_HOST="${VPS_HOST:-YOUR_VPS_IP}"
+VPS_KEY="${VPS_KEY:-$HOME/.ssh/ssh-key-2026-04-04.key}"
 VPS_BACKUP_DIR="${VPS_BACKUP_DIR:-~/backups}"
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/path/to/local/backup/dir}"
 KEEP_DAYS="${KEEP_DAYS:-30}"
@@ -13,7 +14,9 @@ FILENAME="watched-${DATE}.sql.gz"
 mkdir -p "$LOCAL_BACKUP_DIR"
 
 echo "[$(date)] Pulling $FILENAME from $VPS_HOST..."
-scp "${VPS_USER}@${VPS_HOST}:${VPS_BACKUP_DIR}/${FILENAME}" "${LOCAL_BACKUP_DIR}/${FILENAME}"
+scp -i "$VPS_KEY" "${VPS_USER}@${VPS_HOST}:${VPS_BACKUP_DIR}/${FILENAME}" "${LOCAL_BACKUP_DIR}/${FILENAME}"
+echo "[$(date)] Saved to ${LOCAL_BACKUP_DIR}/${FILENAME}"
+
 echo "[$(date)] Saved to ${LOCAL_BACKUP_DIR}/${FILENAME}"
 
 # Remove local copies older than KEEP_DAYS
