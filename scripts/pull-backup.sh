@@ -2,8 +2,8 @@
 set -euo pipefail
 
 VPS_USER="${VPS_USER:-ubuntu}"
-VPS_HOST="${VPS_HOST:-YOUR_VPS_IP}"
-VPS_KEY="${VPS_KEY:-$HOME/.ssh/ssh-key-2026-04-04.key}"
+VPS_HOST="${VPS_HOST:?Set VPS_HOST environment variable}"
+VPS_KEY="${VPS_KEY:?Set VPS_KEY to path of your SSH private key}"
 VPS_BACKUP_DIR="${VPS_BACKUP_DIR:-~/backups}"
 LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/path/to/local/backup/dir}"
 KEEP_DAYS="${KEEP_DAYS:-30}"
