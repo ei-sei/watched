@@ -101,10 +101,6 @@ function OverviewCard({ s }: { s: AdminStats }) {
 }
 
 function InfraCard({ s }: { s: AdminStats }) {
-  const dbPct = s.db_size_limit_bytes > 0
-    ? Math.round((s.db_size_bytes / s.db_size_limit_bytes) * 100)
-    : null
-
   const memPct = s.mem_total_kb > 0
     ? Math.round((s.mem_used_kb / s.mem_total_kb) * 100)
     : null
@@ -118,20 +114,8 @@ function InfraCard({ s }: { s: AdminStats }) {
       <div className="flex items-center justify-between">
         <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Infrastructure</p>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.db_healthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-          DB {s.db_healthy ? 'healthy' : 'error'}
+          DB {s.db_healthy ? `healthy · ${s.db_size_human}` : 'error'}
         </span>
-      </div>
-
-      {/* DB storage */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-xs text-zinc-500">
-          <span>Database storage</span>
-          <span>
-            {s.db_size_human}
-            {dbPct !== null && ` / ${fmtBytes(s.db_size_limit_bytes)} (${dbPct}%)`}
-          </span>
-        </div>
-        {dbPct !== null && <UsageBar pct={dbPct} color={barColor(dbPct)} />}
       </div>
 
       {/* Disk usage */}
