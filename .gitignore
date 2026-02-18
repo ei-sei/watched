@@ -46,7 +46,7 @@ docker-compose.override.yml
 pg_data/
 dumps/
 *.sql.gz
-WATCHED_DB/
+WATCHED/
 
 # ── OS & Editor ────────────────────────────────────────────────────────────────
 .DS_Store
