@@ -137,6 +137,13 @@ func (h *UserHandler) AdminList(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /admin/users/{id}/flags
 func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
+	requesterClaims := auth.ClaimsFrom(r.Context())
+	requester, err := h.users.GetByID(r.Context(), requesterClaims.UserID)
+	if err != nil || requester == nil || requester.Username != "admin" {
+		jsonErr(w, http.StatusForbidden, "only the primary admin can modify user flags")
+		return
+	}
+
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid id")
@@ -172,6 +179,13 @@ func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /admin/users/{id}
 func (h *UserHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	requesterClaims := auth.ClaimsFrom(r.Context())
+	requester, err := h.users.GetByID(r.Context(), requesterClaims.UserID)
+	if err != nil || requester == nil || requester.Username != "admin" {
+		jsonErr(w, http.StatusForbidden, "only the primary admin can delete users")
+		return
+	}
+
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid id")
