@@ -82,8 +82,8 @@ func main() {
 
 	// Public auth routes
 	r.Route("/auth", func(r chi.Router) {
-		r.Post("/register", authH.Register)
-		r.Post("/login", authH.Login)
+		r.With(auth.RateLimit(10, 5)).Post("/register", authH.Register)
+		r.With(auth.RateLimit(10, 5)).Post("/login", authH.Login)
 		r.Post("/refresh", authH.Refresh)
 		r.Post("/logout", authH.Logout)
 	})
