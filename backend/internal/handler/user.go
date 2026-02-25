@@ -139,10 +139,11 @@ func (h *UserHandler) AdminList(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
 	requesterClaims := auth.ClaimsFrom(r.Context())
 	requester, err := h.users.GetByID(r.Context(), requesterClaims.UserID)
-	if err != nil || requester == nil || requester.Username != "admin" {
-		jsonErr(w, http.StatusForbidden, "only the primary admin can modify user flags")
+	if err != nil || requester == nil {
+		jsonErr(w, http.StatusForbidden, "forbidden")
 		return
 	}
+	isSuperAdmin := requester.Username == "admin"
 
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
@@ -156,6 +157,12 @@ func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	// Non-superadmins can only set is_premium, not is_admin
+	if !isSuperAdmin && body.IsAdmin != nil {
+		jsonErr(w, http.StatusForbidden, "only the primary admin can modify the admin flag")
 		return
 	}
 

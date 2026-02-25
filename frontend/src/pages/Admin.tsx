@@ -329,43 +329,43 @@ export default function Admin() {
                 )}
               </div>
               <div className="flex items-center gap-3">
+                {/* Admin flag — superadmin only */}
                 {isSuperAdmin ? (
-                  <>
-                    <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={u.is_admin}
-                        disabled={u.username === 'admin'}
-                        onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_admin: e.target.checked } })}
-                        className="rounded"
-                      />
-                      Admin
-                    </label>
-                    <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={u.is_premium}
-                        disabled={u.username === 'admin'}
-                        onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_premium: e.target.checked } })}
-                        className="rounded"
-                      />
-                      Premium
-                    </label>
-                    {u.username !== 'admin' && (
-                      <button
-                        onClick={() => setDeleteTarget({ id: u.id, username: u.username })}
-                        className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </>
+                  <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={u.is_admin}
+                      disabled={u.username === 'admin'}
+                      onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_admin: e.target.checked } })}
+                      className="rounded"
+                    />
+                    Admin
+                  </label>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    {u.is_admin   && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Admin</span>}
-                    {u.is_premium && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Premium</span>}
-                  </div>
+                  u.is_admin && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Admin</span>
+                )}
+
+                {/* Premium flag — all admins can toggle */}
+                <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={u.is_premium}
+                    disabled={u.username === 'admin'}
+                    onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_premium: e.target.checked } })}
+                    className="rounded"
+                  />
+                  Premium
+                </label>
+
+                {/* Delete — superadmin only */}
+                {isSuperAdmin && u.username !== 'admin' && (
+                  <button
+                    onClick={() => setDeleteTarget({ id: u.id, username: u.username })}
+                    className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
+                    title="Delete user"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 )}
               </div>
             </div>
