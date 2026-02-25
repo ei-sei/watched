@@ -3,6 +3,7 @@ package handler
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ei-sei/brsti/internal/auth"
@@ -37,6 +38,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body.Username = strings.ToLower(body.Username)
 	ctx := r.Context()
 
 	if err := h.users.UseInvite(ctx, body.InviteCode); err != nil {
@@ -74,6 +76,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body.Username = strings.ToLower(body.Username)
 	ctx := r.Context()
 
 	user, err := h.users.GetByUsername(ctx, body.Username)
