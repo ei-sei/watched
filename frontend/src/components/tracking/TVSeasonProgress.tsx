@@ -56,7 +56,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
         </div>
       </div>
 
-      {seasons.map((s) => {
+      {item.media_type !== 'anime' && seasons.map((s) => {
         const watched = watchedBySeason[s.season_number] ?? 0
         const pct = s.episode_count > 0 ? Math.min(100, Math.round((watched / s.episode_count) * 100)) : 0
         const done = s.episode_count > 0 && watched >= s.episode_count
