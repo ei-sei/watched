@@ -1,6 +1,14 @@
 import axios from 'axios'
 import { storage } from '@/platform/storage'
 
+// iOS Safari in standalone (PWA) mode clears HttpOnly cookies when the app
+// is fully closed. We persist the refresh token in localStorage as a fallback
+// and send it via header so sessions survive across app restarts on iOS.
+export const PWA_REFRESH_KEY = 'pwa_refresh_token'
+export function isIOSStandalone(): boolean {
+  return (window.navigator as any).standalone === true
+}
+
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   withCredentials: true,
@@ -19,7 +27,12 @@ let isRefreshing = false
 let refreshQueue: Array<(token: string) => void> = []
 
 async function doRefresh(): Promise<string> {
-  const { data } = await client.post<{ access_token: string }>('/auth/refresh')
+  const headers: Record<string, string> = {}
+  if (isIOSStandalone()) {
+    const pwaToken = localStorage.getItem(PWA_REFRESH_KEY)
+    if (pwaToken) headers['X-Refresh-Token'] = pwaToken
+  }
+  const { data } = await client.post<{ access_token: string }>('/auth/refresh', undefined, { headers })
   await storage.set('access_token', data.access_token)
   return data.access_token
 }

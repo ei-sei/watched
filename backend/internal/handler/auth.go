@@ -131,18 +131,24 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int(auth.RefreshTokenDuration.Seconds()),
 	})
 
-	jsonOK(w, map[string]string{"access_token": access})
+	jsonOK(w, map[string]string{"access_token": access, "refresh_token": refresh})
 }
 
 // POST /auth/refresh
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("refresh_token")
-	if err != nil {
+	// Cookie is primary; X-Refresh-Token header is fallback for iOS PWA
+	// where the HttpOnly cookie is cleared when the app is closed.
+	tokenStr := ""
+	if cookie, err := r.Cookie("refresh_token"); err == nil {
+		tokenStr = cookie.Value
+	} else if h := r.Header.Get("X-Refresh-Token"); h != "" {
+		tokenStr = h
+	} else {
 		jsonErr(w, http.StatusUnauthorized, "missing refresh token")
 		return
 	}
 
-	claims, err := auth.ParseToken(h.cfg.JWTSecret, cookie.Value)
+	claims, err := auth.ParseToken(h.cfg.JWTSecret, tokenStr)
 	if err != nil || claims.Kind != "refresh" {
 		jsonErr(w, http.StatusUnauthorized, "invalid refresh token")
 		return
