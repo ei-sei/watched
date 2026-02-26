@@ -7,7 +7,7 @@ import { ToastProvider } from '@/components/ui/Toast'
 import { authApi } from '@/api/auth'
 import { storage } from '@/platform/storage'
 import { syncMedia, registerSyncOnReconnect } from '@/offline/sync'
-import { isIOSStandalone, PWA_REFRESH_KEY } from '@/api/client'
+import { isPWAStandalone, PWA_REFRESH_KEY } from '@/api/client'
 
 import Layout from '@/components/layout/Layout'
 import Login from '@/pages/Login'
@@ -103,7 +103,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
     await storage.set('access_token', data.access_token)
     // iOS PWA: persist refresh token in localStorage so it survives app restarts
     // (iOS clears HttpOnly cookies when the PWA is fully closed)
-    if (isIOSStandalone() && data.refresh_token) {
+    if (isPWAStandalone() && data.refresh_token) {
       localStorage.setItem(PWA_REFRESH_KEY, data.refresh_token)
     }
     const { data: me } = await authApi.me()
