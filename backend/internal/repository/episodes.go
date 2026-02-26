@@ -137,6 +137,41 @@ func (r *EpisodeRepo) SetSeasonProgress(ctx context.Context, mediaItemID, season
 	return tx.Commit(ctx)
 }
 
+// EpisodeStamp is a lightweight row used for progress visualisation.
+type EpisodeStamp struct {
+	Season    int    `json:"season"`
+	Episode   int    `json:"episode"`
+	WatchedAt string `json:"watched_at"`
+}
+
+// ListStamps returns all episode timestamps for a media item, ordered by season/episode.
+func (r *EpisodeRepo) ListStamps(ctx context.Context, mediaItemID int) ([]EpisodeStamp, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT season_number, episode_number, watched_at
+		 FROM tv_episode_logs
+		 WHERE media_item_id = $1 AND watched_at IS NOT NULL
+		 ORDER BY season_number, episode_number`,
+		mediaItemID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stamps []EpisodeStamp
+	for rows.Next() {
+		var s EpisodeStamp
+		if err := rows.Scan(&s.Season, &s.Episode, &s.WatchedAt); err != nil {
+			return nil, err
+		}
+		stamps = append(stamps, s)
+	}
+	if stamps == nil {
+		stamps = []EpisodeStamp{}
+	}
+	return stamps, rows.Err()
+}
+
 func (r *EpisodeRepo) CountWatched(ctx context.Context, mediaItemID int) (int, error) {
 	var n int
 	err := r.db.QueryRow(ctx,

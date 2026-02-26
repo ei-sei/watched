@@ -111,6 +111,7 @@ func main() {
 
 				// TV episodes
 				r.Get("/episodes", mediaH.ListEpisodes)
+				r.Get("/episode-stamps", mediaH.ListEpisodeStamps)
 				r.Put("/episodes", mediaH.UpsertEpisode)
 				r.Put("/episodes/progress", mediaH.SetSeasonProgress)
 				r.Delete("/episodes/{epID}", mediaH.DeleteEpisode)

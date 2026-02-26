@@ -458,6 +458,26 @@ func (h *MediaHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /media/{id}/episode-stamps
+func (h *MediaHandler) ListEpisodeStamps(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	item, err := h.media.GetByID(r.Context(), id, userIDFrom(r))
+	if err != nil || item == nil {
+		jsonErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	stamps, err := h.episodes.ListStamps(r.Context(), id)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, stamps)
+}
+
 // GET /media/{id}/episodes
 func (h *MediaHandler) ListEpisodes(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
