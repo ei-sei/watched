@@ -12,10 +12,17 @@ export const mediaApi = {
   refreshFromTMDB: (id: number) => client.post<MediaItem>(`/media/${id}/refresh`),
   setSeasonProgress: (id: number, season: number, count: number) =>
     client.put(`/media/${id}/episodes/progress`, { season, count }),
+  listEpisodeStamps: (id: number) => client.get<EpisodeStamp[]>(`/media/${id}/episode-stamps`),
   listRewatches: (id: number) => client.get<Rewatch[]>(`/media/${id}/rewatches`),
   createRewatch: (id: number, data: { started_at?: string | null; finished_at?: string | null }) =>
     client.post<Rewatch>(`/media/${id}/rewatches`, data),
   deleteRewatch: (rewatchId: number) => client.delete(`/rewatches/${rewatchId}`),
+}
+
+export interface EpisodeStamp {
+  season: number
+  episode: number
+  watched_at: string
 }
 
 export interface Rewatch {
