@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLocalEpisodes, useLogEpisode, useDeleteEpisode } from '@/hooks/useLocalEpisodes'
 import { formatDate } from '@/utils/formatters'
 import { mediaApi } from '@/api/media'
@@ -34,6 +35,7 @@ function SeasonRow({ item, s, episodes, log, remove, seasons }: {
   const [inputVal, setInputVal] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const qc = useQueryClient()
 
   const commitProgress = async (raw: string) => {
     const n = parseInt(raw, 10)
@@ -43,6 +45,7 @@ function SeasonRow({ item, s, episodes, log, remove, seasons }: {
     try {
       await mediaApi.setSeasonProgress(item.id, s.season_number, n)
       await syncItemDetail(item.id)
+      qc.invalidateQueries({ queryKey: ['episode-stamps', item.id] })
     } finally {
       setSaving(false)
     }
