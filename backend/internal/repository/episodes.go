@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/ei-sei/brsti/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -139,9 +140,9 @@ func (r *EpisodeRepo) SetSeasonProgress(ctx context.Context, mediaItemID, season
 
 // EpisodeStamp is a lightweight row used for progress visualisation.
 type EpisodeStamp struct {
-	Season    int    `json:"season"`
-	Episode   int    `json:"episode"`
-	WatchedAt string `json:"watched_at"`
+	Season    int       `json:"season"`
+	Episode   int       `json:"episode"`
+	WatchedAt time.Time `json:"watched_at"`
 }
 
 // ListStamps returns all episode timestamps for a media item, ordered by season/episode.
