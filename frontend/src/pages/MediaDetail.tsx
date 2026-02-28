@@ -235,10 +235,10 @@ export default function MediaDetail() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8">
-      <div className="flex flex-col sm:flex-row gap-5">
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div className="flex flex-col sm:flex-row gap-5 sm:gap-7">
         {item.poster_url && (
-          <img src={item.poster_url} alt={item.title} className="w-32 sm:w-44 rounded-lg object-cover flex-shrink-0 shadow-lg self-start" />
+          <img src={item.poster_url} alt={item.title} className="w-36 sm:w-56 rounded-lg object-cover flex-shrink-0 shadow-lg self-start" />
         )}
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-start justify-between gap-2">
