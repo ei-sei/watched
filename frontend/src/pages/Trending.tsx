@@ -174,13 +174,16 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4" onClick={onClose}>
-      <div className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-xl w-full sm:max-w-sm ring-1 ring-white/[0.08] overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div
+        className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-xl w-full sm:max-w-sm ring-1 ring-white/[0.08] overflow-hidden flex flex-col min-h-[60vh] sm:min-h-0"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-start gap-3 p-4 border-b border-white/[0.06]">
+        <div className="flex items-start gap-3 p-4 border-b border-white/[0.06] flex-shrink-0">
           {item.poster ? (
-            <img src={item.poster} alt={item.title} className="w-12 h-[72px] rounded object-cover flex-shrink-0" />
+            <img src={item.poster} alt={item.title} className="w-14 h-[84px] rounded object-cover flex-shrink-0" />
           ) : (
-            <div className="w-12 h-[72px] rounded bg-white/[0.04] flex-shrink-0" />
+            <div className="w-14 h-[84px] rounded bg-white/[0.04] flex-shrink-0" />
           )}
           <div className="flex-1 min-w-0 pt-0.5">
             <p className="text-white font-semibold text-sm leading-snug line-clamp-2">{item.title}</p>
@@ -191,33 +194,35 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* Synopsis */}
+        <div className="p-4 flex flex-col flex-1 gap-4">
+          {/* Synopsis — grows to fill available space */}
           {item.synopsis && (
-            <p className="text-xs text-zinc-400 leading-relaxed max-h-36 overflow-y-auto">{item.synopsis}</p>
+            <p className="text-xs text-zinc-400 leading-relaxed flex-1 overflow-y-auto">{item.synopsis}</p>
           )}
 
-          {/* Add / already in library */}
-          {existing ? (
-            <button
-              onClick={() => {
-                const prefix = { film: 'films', tv_show: 'tv', book: 'books', anime: 'anime' }[existing.media_type] ?? 'films'
-                onClose()
-                navigate(`/${prefix}/${existing.id}`)
-              }}
-              className="w-full py-2.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-sm font-medium rounded-lg transition-colors"
-            >
-              Already in your library →
-            </button>
-          ) : (
-            <button
-              onClick={handleAdd}
-              disabled={create.isPending}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {create.isPending ? 'Adding…' : 'Add to library'}
-            </button>
-          )}
+          {/* Add / already in library — pinned to bottom */}
+          <div className="flex-shrink-0 pb-2">
+            {existing ? (
+              <button
+                onClick={() => {
+                  const prefix = { film: 'films', tv_show: 'tv', book: 'books', anime: 'anime' }[existing.media_type] ?? 'films'
+                  onClose()
+                  navigate(`/${prefix}/${existing.id}`)
+                }}
+                className="w-full py-2.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-sm font-medium rounded-lg transition-colors"
+              >
+                Already in your library →
+              </button>
+            ) : (
+              <button
+                onClick={handleAdd}
+                disabled={create.isPending}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {create.isPending ? 'Adding…' : 'Add to library'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
