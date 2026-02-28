@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocalEpisodes } from '@/hooks/useLocalEpisodes'
 import { mediaApi, type EpisodeStamp } from '@/api/media'
+import { formatDate } from '@/utils/formatters'
 import type { MediaItem } from '@/types/media'
 
 interface Season {
@@ -9,12 +10,6 @@ interface Season {
   episode_count: number
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-// Dots overlaid on a progress bar. For < 50 total episodes: one dot per episode.
-// For >= 50: single dot at the last watched episode only.
 function StampedBar({
   pct,
   stamps,
@@ -28,36 +23,35 @@ function StampedBar({
   color?: string
   height?: string
 }) {
-  const [activeEp, setActiveEp] = useState<number | null>(null)
+  const [activeKey, setActiveKey] = useState<string | null>(null)
 
-  const dots: EpisodeStamp[] = totalEps >= 50
+  const dots = totalEps >= 50
     ? stamps.length > 0 ? [stamps[stamps.length - 1]] : []
     : stamps
 
   return (
-    <div className="relative" style={{ height: '16px' }}>
-      {/* Bar — centred vertically in the 16px container */}
+    <div className="relative h-4">
       <div className={`absolute inset-x-0 top-1/2 -translate-y-1/2 ${height} bg-white/[0.06] rounded-full overflow-hidden`}>
         <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
       </div>
 
-      {/* Dots — centred on the bar */}
       {totalEps > 0 && dots.map((s) => {
+        const key = `${s.season}-${s.episode}`
         const leftPct = Math.min(98, (s.episode / totalEps) * 100)
-        const isActive = activeEp === s.episode
+        const isActive = activeKey === key
         return (
           <div
-            key={s.episode}
+            key={key}
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 cursor-pointer"
             style={{ left: `${leftPct}%` }}
-            onMouseEnter={() => setActiveEp(s.episode)}
-            onMouseLeave={() => setActiveEp(null)}
-            onClick={() => setActiveEp(isActive ? null : s.episode)}
+            onMouseEnter={() => setActiveKey(key)}
+            onMouseLeave={() => setActiveKey(null)}
+            onClick={() => setActiveKey(isActive ? null : key)}
           >
             <div className={`w-2 h-2 rounded-full bg-white/90 border border-black/20 transition-transform ${isActive ? 'scale-125' : ''}`} />
             {isActive && (
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-zinc-800 text-zinc-100 text-[10px] px-2 py-1 rounded shadow-lg z-10 pointer-events-none">
-                Ep {s.episode} · {fmtDate(s.watched_at)}
+                Ep {s.episode} · {formatDate(s.watched_at)}
               </div>
             )}
           </div>
