@@ -125,6 +125,27 @@ func (h *UserHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 
 // --- Admin routes ---
 
+// GET /admin/users/{id}/library — superadmin only
+func (h *UserHandler) AdminGetUserLibrary(w http.ResponseWriter, r *http.Request) {
+	requesterClaims := auth.ClaimsFrom(r.Context())
+	requester, err := h.users.GetByID(r.Context(), requesterClaims.UserID)
+	if err != nil || requester == nil || requester.Username != "admin" {
+		jsonErr(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.media.List(r.Context(), id, repository.MediaFilter{NoLimit: true})
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, result.Items)
+}
+
 // GET /admin/users/{id}/stats
 func (h *UserHandler) AdminGetUserStats(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))

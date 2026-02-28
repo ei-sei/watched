@@ -198,6 +198,41 @@ function UserStatsPanel({ stats }: { stats: AdminUserStats }) {
   )
 }
 
+const LIBRARY_LABELS: Record<string, string> = {
+  film: 'Films', tv_show: 'TV Shows', anime: 'Anime', book: 'Books',
+}
+const LIBRARY_ORDER = ['film', 'tv_show', 'anime', 'book']
+
+function UserLibraryPanel({ items }: { items: import('@/types/media').MediaItem[] }) {
+  const grouped = LIBRARY_ORDER.reduce<Record<string, import('@/types/media').MediaItem[]>>((acc, type) => {
+    const matching = items.filter(i => i.media_type === type)
+    if (matching.length) acc[type] = matching
+    return acc
+  }, {})
+
+  if (!items.length) return <p className="text-xs text-zinc-600 pt-1">Empty library.</p>
+
+  return (
+    <div className="space-y-3 pt-1">
+      {Object.entries(grouped).map(([type, list]) => (
+        <div key={type}>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">
+            {LIBRARY_LABELS[type]} ({list.length})
+          </p>
+          <div className="space-y-0.5">
+            {list.map(item => (
+              <div key={item.id} className="flex items-center justify-between gap-2">
+                <p className="text-xs text-zinc-300 truncate">{item.title}{item.year ? ` (${item.year})` : ''}</p>
+                <span className="text-[10px] text-zinc-600 flex-shrink-0 capitalize">{item.status.replace('_', ' ')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function UserRow({ u, isSuperAdmin, updateFlags, onDelete }: {
   u: AdminUser
   isSuperAdmin: boolean
@@ -205,10 +240,19 @@ function UserRow({ u, isSuperAdmin, updateFlags, onDelete }: {
   onDelete: (u: AdminUser) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [showLibrary, setShowLibrary] = useState(false)
+
   const stats = useQuery({
     queryKey: ['admin', 'user-stats', u.id],
     queryFn: () => adminApi.getUserStats(u.id).then(r => r.data),
     enabled: open,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const library = useQuery({
+    queryKey: ['admin', 'user-library', u.id],
+    queryFn: () => adminApi.getUserLibrary(u.id).then(r => r.data),
+    enabled: isSuperAdmin && open && showLibrary,
     staleTime: 1000 * 60 * 5,
   })
 
@@ -277,6 +321,24 @@ function UserRow({ u, isSuperAdmin, updateFlags, onDelete }: {
           {stats.isLoading && <p className="text-xs text-zinc-600">Loading…</p>}
           {stats.isError && <p className="text-xs text-red-400">Failed to load stats</p>}
           {stats.data && <UserStatsPanel stats={stats.data} />}
+
+          {isSuperAdmin && (
+            <div className="mt-3 border-t border-white/[0.04] pt-3">
+              <button
+                onClick={() => setShowLibrary(v => !v)}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-wider"
+              >
+                {showLibrary ? 'Hide library' : 'View library'}
+              </button>
+              {showLibrary && (
+                <>
+                  {library.isLoading && <p className="text-xs text-zinc-600 mt-2">Loading…</p>}
+                  {library.isError && <p className="text-xs text-red-400 mt-2">Failed to load library</p>}
+                  {library.data && <UserLibraryPanel items={library.data} />}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

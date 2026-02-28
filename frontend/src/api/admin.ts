@@ -59,6 +59,7 @@ export const adminApi = {
   getHealth: () => client.get<ServiceStatus[]>('/admin/health'),
   listUsers: () => client.get<AdminUser[]>('/admin/users'),
   getUserStats: (id: number) => client.get<AdminUserStats>(`/admin/users/${id}/stats`),
+  getUserLibrary: (id: number) => client.get<import('@/types/media').MediaItem[]>(`/admin/users/${id}/library`),
   updateFlags: (id: number, flags: { is_admin?: boolean; is_premium?: boolean }) =>
     client.patch<AdminUser>(`/admin/users/${id}/flags`, flags),
   deleteUser: (id: number) => client.delete(`/admin/users/${id}`),
