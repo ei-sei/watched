@@ -80,6 +80,7 @@ export function useDeleteEpisode(mediaId: number) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['stats'] })
+      qc.invalidateQueries({ queryKey: ['episode-stamps', mediaId] })
     },
   })
 }
