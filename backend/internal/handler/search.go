@@ -110,6 +110,19 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
+	// Post-filter: when a specific type is requested, drop any results that
+	// don't match — TMDB /search/multi returns both films and TV shows so
+	// wrong types can leak through when only one is requested.
+	if mediaType != "" {
+		filtered := all[:0]
+		for _, r := range all {
+			if r.MediaType == mediaType {
+				filtered = append(filtered, r)
+			}
+		}
+		all = filtered
+	}
+
 	rankResults(all, q)
 	jsonOK(w, all)
 }
