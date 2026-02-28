@@ -89,6 +89,7 @@ function ResultCard({
   existing,
   onAdd,
   onNavigate,
+  onSelect,
 }: {
   result: SearchResult
   resultIndex: number
@@ -97,6 +98,7 @@ function ResultCard({
   existing: MediaItem | undefined
   onAdd: (r: SearchResult) => void
   onNavigate: (item: MediaItem) => void
+  onSelect: (r: SearchResult) => void
 }) {
   const isFocused = focusedIndex === resultIndex
   const isAdding = addingId === result.external_id
@@ -115,20 +117,22 @@ function ResultCard({
           : 'bg-[#1a1a1a] ring-white/[0.06]'
       }`}
     >
-      {result.poster_url ? (
-        <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
-      ) : (
-        <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0 flex items-center justify-center">
-          {FALLBACK_ICONS[result.media_type]}
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
+      <button onClick={() => onSelect(result)} className="flex-shrink-0">
+        {result.poster_url ? (
+          <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded" />
+        ) : (
+          <div className="w-12 h-16 bg-[#222] rounded flex items-center justify-center">
+            {FALLBACK_ICONS[result.media_type]}
+          </div>
+        )}
+      </button>
+      <button className="flex-1 min-w-0 text-left" onClick={() => onSelect(result)}>
         <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
         <p className="text-xs text-zinc-500 mt-0.5">{friendlyMeta(result)}</p>
         {result.description && (
           <p className="text-xs text-zinc-600 mt-1.5 line-clamp-2 leading-relaxed">{result.description}</p>
         )}
-      </div>
+      </button>
       {existing ? (
         <button
           onClick={() => onNavigate(existing)}
@@ -149,6 +153,66 @@ function ResultCard({
   )
 }
 
+function SearchDetailSheet({ result, existing, onClose, onAdd, onNavigate, addingId }: {
+  result: SearchResult
+  existing: MediaItem | undefined
+  onClose: () => void
+  onAdd: (r: SearchResult) => void
+  onNavigate: (item: MediaItem) => void
+  addingId: string | null
+}) {
+  const isAdding = addingId === result.external_id
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4" onClick={onClose}>
+      <div
+        className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-xl w-full sm:max-w-sm ring-1 ring-white/[0.08] overflow-hidden flex flex-col min-h-[42vh] sm:min-h-0"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 p-4 border-b border-white/[0.06] flex-shrink-0">
+          {result.poster_url ? (
+            <img src={result.poster_url} alt={result.title} className="w-14 h-[84px] rounded object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-14 h-[84px] rounded bg-white/[0.04] flex-shrink-0 flex items-center justify-center">
+              {FALLBACK_ICONS[result.media_type]}
+            </div>
+          )}
+          <div className="flex-1 min-w-0 pt-0.5">
+            <p className="text-white font-semibold text-sm leading-snug">{result.title}</p>
+            <p className="text-xs text-zinc-500 mt-0.5">{friendlyMeta(result)}</p>
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-400 transition-colors flex-shrink-0 mt-0.5">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-4 flex flex-col flex-1 gap-4">
+          {result.description && (
+            <p className="text-xs text-zinc-400 leading-relaxed flex-1 overflow-y-auto">{result.description}</p>
+          )}
+          <div className="flex-shrink-0 pb-2">
+            {existing ? (
+              <button
+                onClick={() => { onClose(); onNavigate(existing) }}
+                className="w-full py-2.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-sm font-medium rounded-lg transition-colors"
+              >
+                Already in your library →
+              </button>
+            ) : (
+              <button
+                onClick={() => onAdd(result)}
+                disabled={isAdding}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {isAdding ? 'Adding…' : 'Add to library'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Search() {
   const [tab, setTab] = useState<Tab>('multi')
   const { query, setQuery, data, isFetching } = useSearch(tab)
@@ -159,6 +223,7 @@ export default function Search() {
   const [recents, setRecents] = useState<string[]>(getRecents)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [addingId, setAddingId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<SearchResult | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -226,6 +291,7 @@ export default function Search() {
         total_progress: totalProgress,
       })
       show(`"${result.title}" added to library`, 'success')
+      setSelected(null)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 409) {
@@ -298,6 +364,7 @@ export default function Search() {
           existing={libraryMap.get(result.external_id)}
           onAdd={handleAdd}
           onNavigate={handleNavigate}
+          onSelect={setSelected}
         />
       )
     }
@@ -392,6 +459,17 @@ export default function Search() {
         <div className="space-y-6">
           {renderResults()}
         </div>
+      )}
+
+      {selected && (
+        <SearchDetailSheet
+          result={selected}
+          existing={libraryMap.get(selected.external_id)}
+          onClose={() => setSelected(null)}
+          onAdd={handleAdd}
+          onNavigate={handleNavigate}
+          addingId={addingId}
+        />
       )}
     </div>
   )
