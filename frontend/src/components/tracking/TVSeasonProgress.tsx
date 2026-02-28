@@ -35,28 +35,28 @@ function StampedBar({
     : stamps
 
   return (
-    <div className="relative flex items-center" style={{ height: '16px' }}>
-      {/* Bar */}
-      <div className={`absolute inset-x-0 ${height} bg-white/[0.06] rounded-full overflow-hidden`}>
+    <div className="relative" style={{ height: '16px' }}>
+      {/* Bar — centred vertically in the 16px container */}
+      <div className={`absolute inset-x-0 top-1/2 -translate-y-1/2 ${height} bg-white/[0.06] rounded-full overflow-hidden`}>
         <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
       </div>
 
-      {/* Dots */}
+      {/* Dots — centred on the bar */}
       {totalEps > 0 && dots.map((s) => {
-        const left = `${Math.min(99, (s.episode / totalEps) * 100)}%`
+        const leftPct = Math.min(98, (s.episode / totalEps) * 100)
         const isActive = activeEp === s.episode
         return (
           <div
             key={s.episode}
-            className="absolute -translate-x-1/2 cursor-pointer group"
-            style={{ left }}
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 cursor-pointer"
+            style={{ left: `${leftPct}%` }}
             onMouseEnter={() => setActiveEp(s.episode)}
             onMouseLeave={() => setActiveEp(null)}
             onClick={() => setActiveEp(isActive ? null : s.episode)}
           >
-            <div className={`w-2 h-2 rounded-full border border-black/30 transition-transform ${isActive ? 'scale-125' : ''} bg-white/80`} />
+            <div className={`w-2 h-2 rounded-full bg-white/90 border border-black/20 transition-transform ${isActive ? 'scale-125' : ''}`} />
             {isActive && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap bg-zinc-800 text-zinc-100 text-[10px] px-2 py-1 rounded shadow-lg z-10 pointer-events-none">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-zinc-800 text-zinc-100 text-[10px] px-2 py-1 rounded shadow-lg z-10 pointer-events-none">
                 Ep {s.episode} · {fmtDate(s.watched_at)}
               </div>
             )}
