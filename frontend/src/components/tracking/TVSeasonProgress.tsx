@@ -25,7 +25,7 @@ function StampedBar({
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(null)
 
-  const dots = totalEps >= 50
+  const dots = totalEps >= 24
     ? stamps.length > 0 ? [stamps[stamps.length - 1]] : []
     : stamps
 
@@ -37,7 +37,8 @@ function StampedBar({
 
       {totalEps > 0 && dots.map((s) => {
         const key = `${s.season}-${s.episode}`
-        const leftPct = Math.min(98, (s.episode / totalEps) * 100)
+        // Centre each dot within its episode slot for even visual spacing
+        const leftPct = ((s.episode - 0.5) / totalEps) * 100
         const isActive = activeKey === key
         return (
           <div
@@ -48,7 +49,7 @@ function StampedBar({
             onMouseLeave={() => setActiveKey(null)}
             onClick={() => setActiveKey(isActive ? null : key)}
           >
-            <div className={`w-2 h-2 rounded-full bg-white/90 border border-black/20 transition-transform ${isActive ? 'scale-125' : ''}`} />
+            <div className={`w-1.5 h-1.5 rounded-full bg-white/90 border border-black/20 transition-transform ${isActive ? 'scale-125' : ''}`} />
             {isActive && (
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-zinc-800 text-zinc-100 text-[10px] px-2 py-1 rounded shadow-lg z-10 pointer-events-none">
                 Ep {s.episode} · {formatDate(s.watched_at)}
