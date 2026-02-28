@@ -33,6 +33,20 @@ export interface AdminStats {
   disk_used_bytes: number
 }
 
+export interface AdminUserLibraryStat {
+  total: number
+  completed: number
+}
+
+export interface AdminUserStats {
+  films: AdminUserLibraryStat
+  tv_shows: AdminUserLibraryStat
+  anime: AdminUserLibraryStat
+  books: AdminUserLibraryStat
+  episodes_watched: number
+  chapters_read: number
+}
+
 export interface ServiceStatus {
   name: string
   ok: boolean
@@ -44,6 +58,7 @@ export const adminApi = {
   getStats: () => client.get<AdminStats>('/admin/stats'),
   getHealth: () => client.get<ServiceStatus[]>('/admin/health'),
   listUsers: () => client.get<AdminUser[]>('/admin/users'),
+  getUserStats: (id: number) => client.get<AdminUserStats>(`/admin/users/${id}/stats`),
   updateFlags: (id: number, flags: { is_admin?: boolean; is_premium?: boolean }) =>
     client.patch<AdminUser>(`/admin/users/${id}/flags`, flags),
   deleteUser: (id: number) => client.delete(`/admin/users/${id}`),

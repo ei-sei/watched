@@ -169,6 +169,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAdmin)
 			r.Get("/admin/users", userH.AdminList)
+			r.Get("/admin/users/{id}/stats", userH.AdminGetUserStats)
 			r.Patch("/admin/users/{id}/flags", userH.AdminUpdateFlags)
 			r.Delete("/admin/users/{id}", userH.AdminDeleteUser)
 			r.Get("/admin/stats", userH.AdminStats)

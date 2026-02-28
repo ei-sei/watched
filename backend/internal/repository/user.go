@@ -179,6 +179,49 @@ func (r *UserRepo) GetAdminStats(ctx context.Context) (*AdminStats, error) {
 	return s, nil
 }
 
+type UserLibraryStat struct {
+	Total     int64 `json:"total"`
+	Completed int64 `json:"completed"`
+}
+
+type UserStats struct {
+	Films           UserLibraryStat `json:"films"`
+	TVShows         UserLibraryStat `json:"tv_shows"`
+	Anime           UserLibraryStat `json:"anime"`
+	Books           UserLibraryStat `json:"books"`
+	EpisodesWatched int64           `json:"episodes_watched"`
+	ChaptersRead    int64           `json:"chapters_read"`
+}
+
+func (r *UserRepo) GetUserStats(ctx context.Context, userID int) (*UserStats, error) {
+	s := &UserStats{}
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'film'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'film' AND status = 'completed'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'tv_show'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'tv_show' AND status = 'completed'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'anime'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'anime' AND status = 'completed'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'book'),
+			(SELECT COUNT(*) FROM media_items WHERE user_id = $1 AND media_type = 'book' AND status = 'completed'),
+			(SELECT COUNT(*) FROM tv_episode_logs t JOIN media_items m ON m.id = t.media_item_id WHERE m.user_id = $1),
+			(SELECT COUNT(*) FROM book_chapter_logs c JOIN media_items m ON m.id = c.media_item_id WHERE m.user_id = $1)
+		FROM users WHERE id = $1
+	`, userID).Scan(
+		&s.Films.Total, &s.Films.Completed,
+		&s.TVShows.Total, &s.TVShows.Completed,
+		&s.Anime.Total, &s.Anime.Completed,
+		&s.Books.Total, &s.Books.Completed,
+		&s.EpisodesWatched,
+		&s.ChaptersRead,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 func (r *UserRepo) UseInvite(ctx context.Context, code string) error {
 	tag, err := r.db.Exec(ctx,
 		`UPDATE invite_codes SET used_at = NOW() WHERE code = $1 AND used_at IS NULL`, code)

@@ -125,6 +125,21 @@ func (h *UserHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 
 // --- Admin routes ---
 
+// GET /admin/users/{id}/stats
+func (h *UserHandler) AdminGetUserStats(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	stats, err := h.users.GetUserStats(r.Context(), id)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, stats)
+}
+
 // GET /admin/users
 func (h *UserHandler) AdminList(w http.ResponseWriter, r *http.Request) {
 	users, err := h.users.List(r.Context())

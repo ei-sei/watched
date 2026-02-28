@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi, type AdminStats, type ServiceStatus } from '@/api/admin'
+import { adminApi, type AdminStats, type AdminUser, type AdminUserStats, type ServiceStatus } from '@/api/admin'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
-import { Copy, RefreshCw, Trash2 } from 'lucide-react'
+import { formatDate } from '@/utils/formatters'
+import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
 type Tab = 'invites' | 'users'
 
@@ -172,6 +173,116 @@ function ServicesCard({ services, loading }: { services: ServiceStatus[] | undef
   )
 }
 
+function UserStatsPanel({ stats }: { stats: AdminUserStats }) {
+  const sections = [
+    { label: 'Films',    data: stats.films,    extra: null },
+    { label: 'TV',       data: stats.tv_shows, extra: stats.episodes_watched > 0 ? `${stats.episodes_watched} eps` : null },
+    { label: 'Anime',    data: stats.anime,    extra: null },
+    { label: 'Books',    data: stats.books,    extra: stats.chapters_read > 0 ? `${stats.chapters_read} ch` : null },
+  ]
+  const hasAny = sections.some(s => s.data.total > 0)
+  if (!hasAny) return <p className="text-xs text-zinc-600 py-1">No library items yet.</p>
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {sections.filter(s => s.data.total > 0).map(s => (
+        <div key={s.label} className="flex flex-col items-center bg-white/[0.04] rounded-md px-3 py-2 min-w-[60px]">
+          <span className="text-sm font-semibold text-white tabular-nums">{s.data.total}</span>
+          <span className="text-[10px] text-zinc-500 leading-tight">{s.label}</span>
+          {s.data.completed > 0 && (
+            <span className="text-[10px] text-zinc-600 leading-tight">{s.data.completed} done</span>
+          )}
+          {s.extra && <span className="text-[10px] text-indigo-400 leading-tight">{s.extra}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function UserRow({ u, isSuperAdmin, updateFlags, onDelete }: {
+  u: AdminUser
+  isSuperAdmin: boolean
+  updateFlags: (args: { id: number; flags: { is_admin?: boolean; is_premium?: boolean } }) => void
+  onDelete: (u: AdminUser) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const stats = useQuery({
+    queryKey: ['admin', 'user-stats', u.id],
+    queryFn: () => adminApi.getUserStats(u.id).then(r => r.data),
+    enabled: open,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  return (
+    <div className="bg-[#1a1a1a] rounded-lg ring-1 ring-white/[0.06] overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex-1 min-w-0 text-left flex items-center gap-2 group"
+        >
+          <div className="min-w-0">
+            <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
+            {u.display_name && u.display_name !== u.username && (
+              <p className="text-xs text-zinc-600">{u.display_name}</p>
+            )}
+          </div>
+          <span className="text-zinc-600 group-hover:text-zinc-400 transition-colors ml-1 flex-shrink-0">
+            {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </span>
+        </button>
+
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {isSuperAdmin ? (
+            <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
+              <input
+                type="checkbox"
+                checked={u.is_admin}
+                disabled={u.username === 'admin'}
+                onChange={(e) => updateFlags({ id: u.id, flags: { is_admin: e.target.checked } })}
+                className="rounded"
+              />
+              Admin
+            </label>
+          ) : (
+            u.is_admin && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Admin</span>
+          )}
+
+          <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
+            <input
+              type="checkbox"
+              checked={u.is_premium}
+              disabled={u.username === 'admin'}
+              onChange={(e) => updateFlags({ id: u.id, flags: { is_premium: e.target.checked } })}
+              className="rounded"
+            />
+            Premium
+          </label>
+
+          {isSuperAdmin && u.username !== 'admin' && (
+            <button
+              onClick={() => onDelete(u)}
+              className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
+              title="Delete user"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {open && (
+        <div className="px-4 pb-3 border-t border-white/[0.04]">
+          <p className="text-[10px] text-zinc-600 mt-2 mb-2">
+            Joined {formatDate(u.created_at)}
+          </p>
+          {stats.isLoading && <p className="text-xs text-zinc-600">Loading…</p>}
+          {stats.isError && <p className="text-xs text-red-400">Failed to load stats</p>}
+          {stats.data && <UserStatsPanel stats={stats.data} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('invites')
   const [newCode, setNewCode] = useState(randomCode)
@@ -321,54 +432,13 @@ export default function Admin() {
           {users.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
           {users.isError && <p className="text-red-400 text-sm">Failed to load users.</p>}
           {users.data?.map((u) => (
-            <div key={u.id} className="flex items-center gap-3 bg-[#1a1a1a] rounded-lg px-4 py-3 ring-1 ring-white/[0.06]">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
-                {u.display_name && u.display_name !== u.username && (
-                  <p className="text-xs text-zinc-600">{u.display_name}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {/* Admin flag — superadmin only */}
-                {isSuperAdmin ? (
-                  <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={u.is_admin}
-                      disabled={u.username === 'admin'}
-                      onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_admin: e.target.checked } })}
-                      className="rounded"
-                    />
-                    Admin
-                  </label>
-                ) : (
-                  u.is_admin && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Admin</span>
-                )}
-
-                {/* Premium flag — all admins can toggle */}
-                <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
-                  <input
-                    type="checkbox"
-                    checked={u.is_premium}
-                    disabled={u.username === 'admin'}
-                    onChange={(e) => updateFlags.mutate({ id: u.id, flags: { is_premium: e.target.checked } })}
-                    className="rounded"
-                  />
-                  Premium
-                </label>
-
-                {/* Delete — superadmin only */}
-                {isSuperAdmin && u.username !== 'admin' && (
-                  <button
-                    onClick={() => setDeleteTarget({ id: u.id, username: u.username })}
-                    className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
-                    title="Delete user"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
+            <UserRow
+              key={u.id}
+              u={u}
+              isSuperAdmin={isSuperAdmin}
+              updateFlags={(args) => updateFlags.mutate(args)}
+              onDelete={(u) => setDeleteTarget({ id: u.id, username: u.username })}
+            />
           ))}
         </div>
       )}
