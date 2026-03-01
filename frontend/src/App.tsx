@@ -20,6 +20,7 @@ import Stats from '@/pages/Stats'
 import Trending from '@/pages/Trending'
 import Settings from '@/pages/Settings'
 import Admin from '@/pages/Admin'
+import UsersOverview from '@/pages/UsersOverview'
 import SharedList from '@/pages/SharedList'
 import PublicProfile from '@/pages/PublicProfile'
 
@@ -162,6 +163,7 @@ export default function App() {
                 <Route path="trending" element={<Trending />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="admin" element={<Admin />} />
+                <Route path="users" element={<UsersOverview />} />
               </Route>
             </Routes>
           </BrowserRouter>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, TrendingUp, Settings, LogOut, ShieldCheck, MoreHorizontal, X, Lock } from 'lucide-react'
+import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, TrendingUp, Settings, LogOut, ShieldCheck, Users, MoreHorizontal, X, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { VERSION } from '@/version'
 
@@ -66,6 +66,9 @@ export default function BottomNav() {
               </>
             )}
             <SheetLink to="/settings" icon={Settings} label="Settings" onClick={() => setOpen(false)} />
+            {user?.username === 'admin' && (
+              <SheetLink to="/users" icon={Users} label="Users" onClick={() => setOpen(false)} />
+            )}
             {user?.is_admin && (
               <SheetLink to="/admin" icon={ShieldCheck} label="Admin" onClick={() => setOpen(false)} />
             )}
