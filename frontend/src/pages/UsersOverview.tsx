@@ -90,13 +90,14 @@ function UserCard({ u }: { u: AdminUser }) {
 export default function UsersOverview() {
   const { user } = useAuth()
 
-  if (user?.username !== 'admin') return <Navigate to="/" replace />
-
   const users = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: () => adminApi.listUsers().then(r => r.data),
     staleTime: 1000 * 60 * 2,
+    enabled: user?.username === 'admin',
   })
+
+  if (user?.username !== 'admin') return <Navigate to="/" replace />
 
   return (
     <div className="space-y-4 max-w-2xl">
