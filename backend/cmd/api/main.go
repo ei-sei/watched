@@ -44,6 +44,7 @@ func main() {
 	chapterRepo := repository.NewChapterRepo(pool)
 	listRepo    := repository.NewListRepo(pool)
 	rewatchRepo := repository.NewRewatchRepo(pool)
+	portalRepo  := repository.NewPortalRepo(pool)
 
 	// Handlers
 	authH   := handler.NewAuthHandler(userRepo, cfg)
@@ -57,6 +58,7 @@ func main() {
 	healthH   := handler.NewHealthHandler(cfg)
 	trendingH := handler.NewTrendingHandler(cfg)
 	rewatchH  := handler.NewRewatchHandler(rewatchRepo, mediaRepo)
+	portalH   := handler.NewPortalHandler(portalRepo)
 
 	r := chi.NewRouter()
 
@@ -168,6 +170,13 @@ func main() {
 		// Admin
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAdmin)
+			// Portal
+			r.Get("/portal", portalH.List)
+			r.Get("/portal/status", portalH.Status)
+			r.Post("/portal", portalH.Create)
+			r.Patch("/portal/{id}", portalH.Update)
+			r.Delete("/portal/{id}", portalH.Delete)
+
 			r.Get("/admin/users", userH.AdminList)
 			r.Get("/admin/users/{id}/stats", userH.AdminGetUserStats)
 			r.Get("/admin/users/{id}/library", userH.AdminGetUserLibrary)
