@@ -43,8 +43,9 @@ func (h *PortalHandler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type result struct {
-		ID int  `json:"id"`
-		OK bool `json:"ok"`
+		ID         int  `json:"id"`
+		OK         bool `json:"ok"`
+		StatusCode int  `json:"status_code"`
 	}
 
 	results := make([]result, len(links))
@@ -53,8 +54,8 @@ func (h *PortalHandler) Status(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(i int, url string, id int) {
 			defer wg.Done()
-			ok := h.ping(url)
-			results[i] = result{ID: id, OK: ok}
+			code := h.ping(url)
+			results[i] = result{ID: id, OK: code > 0 && code < 500, StatusCode: code}
 		}(i, l.URL, l.ID)
 	}
 	wg.Wait()
@@ -62,18 +63,18 @@ func (h *PortalHandler) Status(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, results)
 }
 
-func (h *PortalHandler) ping(url string) bool {
+func (h *PortalHandler) ping(url string) int {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
-		return false
+		return 0
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := h.client.Do(req)
 	if err != nil {
-		return false
+		return 0
 	}
 	resp.Body.Close()
-	return resp.StatusCode < 500
+	return resp.StatusCode
 }
 
 // POST /portal

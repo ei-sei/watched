@@ -12,6 +12,7 @@ export interface PortalLink {
 export interface PortalStatus {
   id: number
   ok: boolean
+  status_code: number
 }
 
 export const portalApi = {

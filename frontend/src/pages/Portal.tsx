@@ -15,19 +15,33 @@ function favicon(url: string) {
   }
 }
 
-function StatusDot({ ok }: { ok: boolean | undefined }) {
-  if (ok === undefined) return <span className="w-2 h-2 rounded-full bg-zinc-700 animate-pulse" />
-  return <span className={`w-2 h-2 rounded-full ${ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+function StatusBadge({ status }: { status: { ok: boolean; status_code: number } | undefined }) {
+  if (!status) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 animate-pulse" />
+        <span className="text-[10px] text-zinc-600 tabular-nums">—</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`w-1.5 h-1.5 rounded-full ${status.ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+      <span className={`text-[10px] tabular-nums font-mono ${status.ok ? 'text-emerald-500' : 'text-red-400'}`}>
+        {status.status_code > 0 ? status.status_code : 'ERR'}
+      </span>
+    </div>
+  )
 }
 
 function LinkCard({
   link,
-  ok,
+  status,
   onEdit,
   onDelete,
 }: {
   link: PortalLink
-  ok: boolean | undefined
+  status: { ok: boolean; status_code: number } | undefined
   onEdit: (l: PortalLink) => void
   onDelete: (l: PortalLink) => void
 }) {
@@ -51,26 +65,26 @@ function LinkCard({
           )}
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-zinc-200">{link.name}</p>
-            <StatusDot ok={ok} />
-          </div>
+          <p className="text-sm font-medium text-zinc-200">{link.name}</p>
           <p className="text-xs text-zinc-600 truncate">{displayUrl}</p>
         </div>
       </a>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button
-          onClick={() => onEdit(link)}
-          className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
-        >
-          <Pencil size={13} />
-        </button>
-        <button
-          onClick={() => onDelete(link)}
-          className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
-        >
-          <Trash2 size={13} />
-        </button>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <StatusBadge status={status} />
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onEdit(link)}
+            className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={() => onDelete(link)}
+            className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -182,7 +196,7 @@ export default function Portal() {
     refetchOnWindowFocus: false,
   })
 
-  const statusMap = new Map((statuses.data ?? []).map(s => [s.id, s.ok]))
+  const statusMap = new Map((statuses.data ?? []).map(s => [s.id, { ok: s.ok, status_code: s.status_code }]))
 
   const create = useMutation({
     mutationFn: (data: { name: string; url: string; category: string }) => portalApi.create(data),
@@ -237,7 +251,7 @@ export default function Portal() {
                 <LinkCard
                   key={l.id}
                   link={l}
-                  ok={statusMap.get(l.id)}
+                  status={statusMap.get(l.id)}
                   onEdit={setEditing}
                   onDelete={setDeleteTarget}
                 />
