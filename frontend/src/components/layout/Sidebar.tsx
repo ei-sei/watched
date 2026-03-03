@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, TrendingUp, Settings, LogOut, ShieldCheck, Lock } from 'lucide-react'
+import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, TrendingUp, Settings, LogOut, ShieldCheck, Users, Globe, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import SyncIndicator from '@/components/ui/SyncIndicator'
 import { VERSION } from '@/version'
@@ -91,6 +91,18 @@ export default function Sidebar() {
           <SyncIndicator />
         </div>
         <div className="border-t border-white/[0.06] mb-2" />
+        {user?.is_admin && (
+          <NavLink to="/portal" className={linkClass}>
+            <Globe size={15} strokeWidth={1.75} />
+            Portal
+          </NavLink>
+        )}
+        {user?.username === 'admin' && (
+          <NavLink to="/users" className={linkClass}>
+            <Users size={15} strokeWidth={1.75} />
+            Users
+          </NavLink>
+        )}
         {user?.is_admin && (
           <NavLink to="/admin" className={linkClass}>
             <ShieldCheck size={15} strokeWidth={1.75} />
