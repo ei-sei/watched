@@ -67,6 +67,12 @@ export default function Sidebar() {
               <TrendingUp size={15} strokeWidth={1.75} />
               Trending
             </NavLink>
+            {user?.is_admin && (
+              <NavLink to="/portal" className={linkClass}>
+                <Globe size={15} strokeWidth={1.75} />
+                Portal
+              </NavLink>
+            )}
           </>
         ) : (
           <>
@@ -91,12 +97,6 @@ export default function Sidebar() {
           <SyncIndicator />
         </div>
         <div className="border-t border-white/[0.06] mb-2" />
-        {user?.is_admin && (
-          <NavLink to="/portal" className={linkClass}>
-            <Globe size={15} strokeWidth={1.75} />
-            Portal
-          </NavLink>
-        )}
         {user?.username === 'admin' && (
           <NavLink to="/users" className={linkClass}>
             <Users size={15} strokeWidth={1.75} />

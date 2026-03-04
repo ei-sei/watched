@@ -50,6 +50,9 @@ export default function BottomNav() {
               <>
                 <SheetLink to="/stats" icon={BarChart2} label="Stats" onClick={() => setOpen(false)} />
                 <SheetLink to="/trending" icon={TrendingUp} label="Trending" onClick={() => setOpen(false)} />
+                {user?.is_admin && (
+                  <SheetLink to="/portal" icon={Globe} label="Portal" onClick={() => setOpen(false)} />
+                )}
               </>
             ) : (
               <>
@@ -68,9 +71,6 @@ export default function BottomNav() {
             <SheetLink to="/settings" icon={Settings} label="Settings" onClick={() => setOpen(false)} />
             {user?.username === 'admin' && (
               <SheetLink to="/users" icon={Users} label="Users" onClick={() => setOpen(false)} />
-            )}
-            {user?.is_admin && (
-              <SheetLink to="/portal" icon={Globe} label="Portal" onClick={() => setOpen(false)} />
             )}
             {user?.is_admin && (
               <SheetLink to="/admin" icon={ShieldCheck} label="Admin" onClick={() => setOpen(false)} />

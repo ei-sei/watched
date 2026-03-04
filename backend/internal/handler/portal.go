@@ -77,6 +77,22 @@ func (h *PortalHandler) ping(url string) int {
 	return resp.StatusCode
 }
 
+// PUT /portal/reorder
+func (h *PortalHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []int `json:"ids"`
+	}
+	if err := decode(r, &body); err != nil || len(body.IDs) == 0 {
+		jsonErr(w, http.StatusBadRequest, "ids array required")
+		return
+	}
+	if err := h.portal.Reorder(r.Context(), body.IDs); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /portal
 func (h *PortalHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {

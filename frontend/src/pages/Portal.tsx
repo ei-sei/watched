@@ -4,7 +4,7 @@ import { portalApi, type PortalLink } from '@/api/portal'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { Navigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, GripVertical } from 'lucide-react'
 
 function favicon(url: string) {
   try {
@@ -39,23 +39,40 @@ function LinkCard({
   status,
   onEdit,
   onDelete,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  dragging,
 }: {
   link: PortalLink
   status: { ok: boolean; status_code: number } | undefined
   onEdit: (l: PortalLink) => void
   onDelete: (l: PortalLink) => void
+  onDragStart: (id: number) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (id: number) => void
+  dragging: boolean
 }) {
   const icon = favicon(link.url)
   let displayUrl = link.url
   try { displayUrl = new URL(link.url).hostname } catch { /* keep original */ }
 
   return (
-    <div className="bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-xl p-4 flex items-center gap-4 group">
+    <div
+      draggable
+      onDragStart={() => onDragStart(link.id)}
+      onDragOver={onDragOver}
+      onDrop={() => onDrop(link.id)}
+      className={`bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-xl p-4 flex items-center gap-3 group transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
+    >
+      <div className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-500 transition-colors flex-shrink-0">
+        <GripVertical size={14} />
+      </div>
       <a
         href={link.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-4 flex-1 min-w-0"
+        className="flex items-center gap-3 flex-1 min-w-0"
       >
         <div className="w-10 h-10 rounded-lg bg-white/[0.04] flex-shrink-0 flex items-center justify-center overflow-hidden">
           {icon ? (
@@ -181,6 +198,7 @@ export default function Portal() {
   const qc = useQueryClient()
   const [editing, setEditing] = useState<PortalLink | null | 'new'>(null)
   const [deleteTarget, setDeleteTarget] = useState<PortalLink | null>(null)
+  const [dragId, setDragId] = useState<number | null>(null)
 
   const links = useQuery({
     queryKey: ['portal', 'links'],
@@ -216,6 +234,23 @@ export default function Portal() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['portal'] }); setDeleteTarget(null); show('Link removed', 'success') },
     onError: () => show('Failed to remove link', 'error'),
   })
+
+  const reorder = useMutation({
+    mutationFn: (ids: number[]) => portalApi.reorder(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'links'] }),
+  })
+
+  const handleDrop = (targetId: number) => {
+    if (dragId === null || dragId === targetId || !links.data) return
+    const items = [...links.data]
+    const fromIdx = items.findIndex(l => l.id === dragId)
+    const toIdx = items.findIndex(l => l.id === targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    items.splice(toIdx, 0, items.splice(fromIdx, 1)[0])
+    qc.setQueryData(['portal', 'links'], items)
+    reorder.mutate(items.map(l => l.id))
+    setDragId(null)
+  }
 
   if (!user?.is_admin) return <Navigate to="/" replace />
 
@@ -254,6 +289,10 @@ export default function Portal() {
                   status={statusMap.get(l.id)}
                   onEdit={setEditing}
                   onDelete={setDeleteTarget}
+                  onDragStart={setDragId}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleDrop}
+                  dragging={dragId === l.id}
                 />
               ))}
             </div>

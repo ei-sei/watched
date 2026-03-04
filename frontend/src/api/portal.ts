@@ -23,4 +23,5 @@ export const portalApi = {
   update: (id: number, data: { name: string; url: string; category: string }) =>
     client.patch<PortalLink>(`/portal/${id}`, data),
   delete: (id: number) => client.delete(`/portal/${id}`),
+  reorder: (ids: number[]) => client.put('/portal/reorder', { ids }),
 }

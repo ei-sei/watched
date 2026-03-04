@@ -174,6 +174,7 @@ func main() {
 			r.Get("/portal", portalH.List)
 			r.Get("/portal/status", portalH.Status)
 			r.Post("/portal", portalH.Create)
+			r.Put("/portal/reorder", portalH.Reorder)
 			r.Patch("/portal/{id}", portalH.Update)
 			r.Delete("/portal/{id}", portalH.Delete)
 
