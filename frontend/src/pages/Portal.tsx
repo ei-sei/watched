@@ -4,7 +4,7 @@ import { portalApi, type PortalLink } from '@/api/portal'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { Navigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, X, GripVertical } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, ChevronUp, ChevronDown } from 'lucide-react'
 
 function favicon(url: string) {
   try {
@@ -39,34 +39,41 @@ function LinkCard({
   status,
   onEdit,
   onDelete,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  dragging,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
 }: {
   link: PortalLink
   status: { ok: boolean; status_code: number } | undefined
   onEdit: (l: PortalLink) => void
   onDelete: (l: PortalLink) => void
-  onDragStart: (id: number) => void
-  onDragOver: (e: React.DragEvent) => void
-  onDrop: (id: number) => void
-  dragging: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+  isFirst: boolean
+  isLast: boolean
 }) {
   const icon = favicon(link.url)
   let displayUrl = link.url
   try { displayUrl = new URL(link.url).hostname } catch { /* keep original */ }
 
   return (
-    <div
-      draggable
-      onDragStart={() => onDragStart(link.id)}
-      onDragOver={onDragOver}
-      onDrop={() => onDrop(link.id)}
-      className={`bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-xl p-4 flex items-center gap-3 group transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
-    >
-      <div className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-500 transition-colors flex-shrink-0">
-        <GripVertical size={14} />
+    <div className="bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-xl p-4 flex items-center gap-3 group">
+      <div className="flex flex-col gap-0.5 flex-shrink-0">
+        <button
+          onClick={onMoveUp}
+          disabled={isFirst}
+          className="p-0.5 text-zinc-700 hover:text-zinc-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronUp size={13} />
+        </button>
+        <button
+          onClick={onMoveDown}
+          disabled={isLast}
+          className="p-0.5 text-zinc-700 hover:text-zinc-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronDown size={13} />
+        </button>
       </div>
       <a
         href={link.url}
@@ -89,16 +96,10 @@ function LinkCard({
       <div className="flex items-center gap-3 flex-shrink-0">
         <StatusBadge status={status} />
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onEdit(link)}
-            className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
-          >
+          <button onClick={() => onEdit(link)} className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded">
             <Pencil size={13} />
           </button>
-          <button
-            onClick={() => onDelete(link)}
-            className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
-          >
+          <button onClick={() => onDelete(link)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded">
             <Trash2 size={13} />
           </button>
         </div>
@@ -198,7 +199,6 @@ export default function Portal() {
   const qc = useQueryClient()
   const [editing, setEditing] = useState<PortalLink | null | 'new'>(null)
   const [deleteTarget, setDeleteTarget] = useState<PortalLink | null>(null)
-  const [dragId, setDragId] = useState<number | null>(null)
 
   const links = useQuery({
     queryKey: ['portal', 'links'],
@@ -240,16 +240,15 @@ export default function Portal() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'links'] }),
   })
 
-  const handleDrop = (targetId: number) => {
-    if (dragId === null || dragId === targetId || !links.data) return
+  const handleMove = (id: number, direction: 'up' | 'down') => {
+    if (!links.data) return
     const items = [...links.data]
-    const fromIdx = items.findIndex(l => l.id === dragId)
-    const toIdx = items.findIndex(l => l.id === targetId)
-    if (fromIdx === -1 || toIdx === -1) return
-    items.splice(toIdx, 0, items.splice(fromIdx, 1)[0])
+    const idx = items.findIndex(l => l.id === id)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= items.length) return
+    ;[items[idx], items[swapIdx]] = [items[swapIdx], items[idx]]
     qc.setQueryData(['portal', 'links'], items)
     reorder.mutate(items.map(l => l.id))
-    setDragId(null)
   }
 
   if (!user?.is_admin) return <Navigate to="/" replace />
@@ -282,17 +281,17 @@ export default function Portal() {
           <div key={key} className="space-y-3">
             <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{label}</p>
             <div className="space-y-2">
-              {items.map(l => (
+              {items.map((l, i) => (
                 <LinkCard
                   key={l.id}
                   link={l}
                   status={statusMap.get(l.id)}
                   onEdit={setEditing}
                   onDelete={setDeleteTarget}
-                  onDragStart={setDragId}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={handleDrop}
-                  dragging={dragId === l.id}
+                  onMoveUp={() => handleMove(l.id, 'up')}
+                  onMoveDown={() => handleMove(l.id, 'down')}
+                  isFirst={i === 0}
+                  isLast={i === items.length - 1}
                 />
               ))}
             </div>
