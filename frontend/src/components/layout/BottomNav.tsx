@@ -46,27 +46,26 @@ export default function BottomNav() {
             </div>
           </div>
           <div className="p-2 space-y-0.5">
-            {(user?.is_premium || user?.is_admin) ? (
-              <>
-                <SheetLink to="/stats" icon={BarChart2} label="Stats" onClick={() => setOpen(false)} />
-                <SheetLink to="/trending" icon={TrendingUp} label="Trending" onClick={() => setOpen(false)} />
-                {user?.is_admin && (
-                  <SheetLink to="/portal" icon={Globe} label="Portal" onClick={() => setOpen(false)} />
-                )}
-              </>
+            {(user?.is_admin || !user?.feature_flags?.stats || user?.is_premium) ? (
+              <SheetLink to="/stats" icon={BarChart2} label="Stats" onClick={() => setOpen(false)} />
             ) : (
-              <>
-                <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-700 select-none">
-                  <BarChart2 size={16} />
-                  Stats
-                  <Lock size={12} className="ml-auto" />
-                </div>
-                <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-700 select-none">
-                  <TrendingUp size={16} />
-                  Trending
-                  <Lock size={12} className="ml-auto" />
-                </div>
-              </>
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-700 select-none">
+                <BarChart2 size={16} />
+                Stats
+                <Lock size={12} className="ml-auto" />
+              </div>
+            )}
+            {(user?.is_admin || !user?.feature_flags?.trending || user?.is_premium) ? (
+              <SheetLink to="/trending" icon={TrendingUp} label="Trending" onClick={() => setOpen(false)} />
+            ) : (
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-700 select-none">
+                <TrendingUp size={16} />
+                Trending
+                <Lock size={12} className="ml-auto" />
+              </div>
+            )}
+            {(user?.is_admin || !user?.feature_flags?.portal || user?.is_premium) && (
+              <SheetLink to="/portal" icon={Globe} label="Portal" onClick={() => setOpen(false)} />
             )}
             <SheetLink to="/settings" icon={Settings} label="Settings" onClick={() => setOpen(false)} />
             {user?.username === 'admin' && (

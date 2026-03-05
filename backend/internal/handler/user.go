@@ -19,12 +19,13 @@ import (
 type UserHandler struct {
 	users    *repository.UserRepo
 	media    *repository.MediaRepo
+	flags    *repository.FlagsRepo
 	cfg      *config.Config
 	validate *validator.Validate
 }
 
-func NewUserHandler(users *repository.UserRepo, media *repository.MediaRepo, cfg *config.Config) *UserHandler {
-	return &UserHandler{users: users, media: media, cfg: cfg, validate: validator.New()}
+func NewUserHandler(users *repository.UserRepo, media *repository.MediaRepo, flags *repository.FlagsRepo, cfg *config.Config) *UserHandler {
+	return &UserHandler{users: users, media: media, flags: flags, cfg: cfg, validate: validator.New()}
 }
 
 // GET /users/me
@@ -35,7 +36,15 @@ func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusNotFound, "user not found")
 		return
 	}
-	jsonOK(w, user)
+	flagMap, err := h.flags.GetMap(r.Context())
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, struct {
+		*models.User
+		FeatureFlags map[string]bool `json:"feature_flags"`
+	}{User: user, FeatureFlags: flagMap})
 }
 
 // PATCH /users/me

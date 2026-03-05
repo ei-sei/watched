@@ -54,6 +54,12 @@ export interface ServiceStatus {
   error?: string
 }
 
+export interface FeatureFlag {
+  key: string
+  is_premium: boolean
+  updated_at: string
+}
+
 export const adminApi = {
   getStats: () => client.get<AdminStats>('/admin/stats'),
   getHealth: () => client.get<ServiceStatus[]>('/admin/health'),
@@ -66,4 +72,6 @@ export const adminApi = {
   listInvites: () => client.get<InviteCode[]>('/admin/invites'),
   createInvite: (code: string) => client.post<{ code: string }>('/admin/invites', { code }),
   deleteInvite: (code: string) => client.delete(`/admin/invites/${code}`),
+  getFlags: () => client.get<FeatureFlag[]>('/admin/flags'),
+  setFlag: (key: string, isPremium: boolean) => client.patch(`/admin/flags/${key}`, { is_premium: isPremium }),
 }

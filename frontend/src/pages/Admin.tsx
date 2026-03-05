@@ -1,12 +1,48 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi, type AdminStats, type AdminUser, type AdminUserStats, type ServiceStatus } from '@/api/admin'
+import { adminApi, type AdminStats, type AdminUser, type AdminUserStats, type ServiceStatus, type FeatureFlag } from '@/api/admin'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
 import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 
-type Tab = 'invites' | 'users'
+type Tab = 'invites' | 'users' | 'flags'
+
+const FLAG_LABELS: Record<string, string> = {
+  stats: 'Stats',
+  trending: 'Trending',
+  portal: 'Portal',
+}
+
+function FeatureFlagsTab({ flags, onToggle }: { flags: FeatureFlag[]; onToggle: (key: string, isPremium: boolean) => void }) {
+  return (
+    <div className="space-y-2">
+      {flags.map((f) => (
+        <div key={f.key} className="bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-xl px-4 py-3 flex items-center justify-between">
+          <span className="text-sm text-zinc-200 font-medium">{FLAG_LABELS[f.key] ?? f.key}</span>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => onToggle(f.key, false)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                !f.is_premium ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+              }`}
+            >
+              Free
+            </button>
+            <button
+              onClick={() => onToggle(f.key, true)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                f.is_premium ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+              }`}
+            >
+              Premium
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function randomCode() {
   return Math.random().toString(36).slice(2, 10).toUpperCase() +
@@ -358,6 +394,7 @@ export default function Admin() {
   const health  = useQuery({ queryKey: ['admin', 'health'],  queryFn: () => adminApi.getHealth().then(r => r.data), staleTime: 30_000 })
   const invites = useQuery({ queryKey: ['admin', 'invites'], queryFn: () => adminApi.listInvites().then(r => r.data) })
   const users   = useQuery({ queryKey: ['admin', 'users'],   queryFn: () => adminApi.listUsers().then(r => r.data), enabled: tab === 'users' })
+  const flags   = useQuery({ queryKey: ['admin', 'flags'],   queryFn: () => adminApi.getFlags().then(r => r.data), enabled: isSuperAdmin && tab === 'flags' })
 
   const deleteInvite = useMutation({
     mutationFn: (code: string) => adminApi.deleteInvite(code),
@@ -383,6 +420,16 @@ export default function Admin() {
       adminApi.updateFlags(id, flags),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
     onError: () => show('Failed to update user', 'error'),
+  })
+
+  const setFlag = useMutation({
+    mutationFn: ({ key, isPremium }: { key: string; isPremium: boolean }) =>
+      adminApi.setFlag(key, isPremium),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'flags'] })
+      qc.invalidateQueries({ queryKey: ['user'] })
+    },
+    onError: () => show('Failed to update feature flag', 'error'),
   })
 
   const deleteUser = useMutation({
@@ -418,6 +465,9 @@ export default function Admin() {
       <div className="flex gap-1.5">
         <button className={tabClass('invites')} onClick={() => setTab('invites')}>Invite Codes</button>
         <button className={tabClass('users')}   onClick={() => setTab('users')}>Users</button>
+        {isSuperAdmin && (
+          <button className={tabClass('flags')} onClick={() => setTab('flags')}>Feature Flags</button>
+        )}
       </div>
 
       {tab === 'invites' && (
@@ -502,6 +552,20 @@ export default function Admin() {
               onDelete={(u) => setDeleteTarget({ id: u.id, username: u.username })}
             />
           ))}
+        </div>
+      )}
+
+      {tab === 'flags' && isSuperAdmin && (
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-500">Toggle whether a feature requires a premium subscription or is available to all users.</p>
+          {flags.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
+          {flags.isError && <p className="text-red-400 text-sm">Failed to load feature flags.</p>}
+          {flags.data && (
+            <FeatureFlagsTab
+              flags={flags.data}
+              onToggle={(key, isPremium) => setFlag.mutate({ key, isPremium })}
+            />
+          )}
         </div>
       )}
 

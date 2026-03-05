@@ -57,36 +57,35 @@ export default function Sidebar() {
             {label}
           </NavLink>
         ))}
-        {(user?.is_premium || user?.is_admin) ? (
-          <>
-            <NavLink to="/stats" className={linkClass}>
-              <BarChart2 size={15} strokeWidth={1.75} />
-              Stats
-            </NavLink>
-            <NavLink to="/trending" className={linkClass}>
-              <TrendingUp size={15} strokeWidth={1.75} />
-              Trending
-            </NavLink>
-            {user?.is_admin && (
-              <NavLink to="/portal" className={linkClass}>
-                <Globe size={15} strokeWidth={1.75} />
-                Portal
-              </NavLink>
-            )}
-          </>
+        {(user?.is_admin || !user?.feature_flags?.stats || user?.is_premium) ? (
+          <NavLink to="/stats" className={linkClass}>
+            <BarChart2 size={15} strokeWidth={1.75} />
+            Stats
+          </NavLink>
         ) : (
-          <>
-            <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
-              <BarChart2 size={15} strokeWidth={1.75} />
-              Stats
-              <Lock size={11} className="ml-auto" />
-            </span>
-            <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
-              <TrendingUp size={15} strokeWidth={1.75} />
-              Trending
-              <Lock size={11} className="ml-auto" />
-            </span>
-          </>
+          <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
+            <BarChart2 size={15} strokeWidth={1.75} />
+            Stats
+            <Lock size={11} className="ml-auto" />
+          </span>
+        )}
+        {(user?.is_admin || !user?.feature_flags?.trending || user?.is_premium) ? (
+          <NavLink to="/trending" className={linkClass}>
+            <TrendingUp size={15} strokeWidth={1.75} />
+            Trending
+          </NavLink>
+        ) : (
+          <span className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm text-zinc-700 cursor-default select-none">
+            <TrendingUp size={15} strokeWidth={1.75} />
+            Trending
+            <Lock size={11} className="ml-auto" />
+          </span>
+        )}
+        {(user?.is_admin || !user?.feature_flags?.portal || user?.is_premium) && (
+          <NavLink to="/portal" className={linkClass}>
+            <Globe size={15} strokeWidth={1.75} />
+            Portal
+          </NavLink>
         )}
       </nav>
 

@@ -110,12 +110,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("UpdateLoginFail reset user %d: %v", user.ID, err)
 	}
 
-	access, err := auth.NewAccessToken(h.cfg.JWTSecret, user.ID, user.IsAdmin, user.IsPremium)
+	access, err := auth.NewAccessToken(h.cfg.JWTSecret, user.Username, user.ID, user.IsAdmin, user.IsPremium)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	refresh, err := auth.NewRefreshToken(h.cfg.JWTSecret, user.ID, user.IsAdmin, user.IsPremium)
+	refresh, err := auth.NewRefreshToken(h.cfg.JWTSecret, user.Username, user.ID, user.IsAdmin, user.IsPremium)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
@@ -162,7 +162,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, err := auth.NewAccessToken(h.cfg.JWTSecret, user.ID, user.IsAdmin, user.IsPremium)
+	access, err := auth.NewAccessToken(h.cfg.JWTSecret, user.Username, user.ID, user.IsAdmin, user.IsPremium)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return

@@ -7,6 +7,7 @@ export interface User {
   is_premium: boolean
   is_public: boolean
   created_at: string
+  feature_flags: Record<string, boolean>
 }
 
 export interface TokenResponse {

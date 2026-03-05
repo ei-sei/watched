@@ -45,10 +45,11 @@ func main() {
 	listRepo    := repository.NewListRepo(pool)
 	rewatchRepo := repository.NewRewatchRepo(pool)
 	portalRepo  := repository.NewPortalRepo(pool)
+	flagsRepo   := repository.NewFlagsRepo(pool)
 
 	// Handlers
 	authH   := handler.NewAuthHandler(userRepo, cfg)
-	userH   := handler.NewUserHandler(userRepo, mediaRepo, cfg)
+	userH   := handler.NewUserHandler(userRepo, mediaRepo, flagsRepo, cfg)
 	mediaH  := handler.NewMediaHandler(mediaRepo, episodeRepo, chapterRepo, cfg.TMDBKey)
 	listH   := handler.NewListHandler(listRepo, mediaRepo)
 	searchH  := handler.NewSearchHandler(cfg)
@@ -59,6 +60,7 @@ func main() {
 	trendingH := handler.NewTrendingHandler(cfg)
 	rewatchH  := handler.NewRewatchHandler(rewatchRepo, mediaRepo)
 	portalH   := handler.NewPortalHandler(portalRepo)
+	flagsH    := handler.NewFlagsHandler(flagsRepo)
 
 	r := chi.NewRouter()
 
@@ -147,12 +149,24 @@ func main() {
 		// Search — stricter limit since each request fans out to 3-4 external APIs
 		r.With(auth.RateLimit(30, 10)).Get("/search", searchH.Search)
 
-		// Stats + Trending — premium only (admins pass through)
+		// Stats — feature-flag gated (premium or free based on flag, admins always pass)
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequirePremium)
+			r.Use(handler.RequireFeature(flagsRepo, "stats"))
 			r.Get("/stats", statsH.Get)
 			r.Get("/stats/summary", statsH.Summary)
+		})
+
+		// Trending — feature-flag gated
+		r.Group(func(r chi.Router) {
+			r.Use(handler.RequireFeature(flagsRepo, "trending"))
 			r.Get("/trending/{category}", trendingH.Get)
+		})
+
+		// Portal reads — feature-flag gated
+		r.Group(func(r chi.Router) {
+			r.Use(handler.RequireFeature(flagsRepo, "portal"))
+			r.Get("/portal", portalH.List)
+			r.Get("/portal/status", portalH.Status)
 		})
 
 		// Rewatches (delete by rewatch ID)
@@ -170,13 +184,15 @@ func main() {
 		// Admin
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAdmin)
-			// Portal
-			r.Get("/portal", portalH.List)
-			r.Get("/portal/status", portalH.Status)
+			// Portal writes (reads are flag-gated above)
 			r.Post("/portal", portalH.Create)
 			r.Put("/portal/reorder", portalH.Reorder)
 			r.Patch("/portal/{id}", portalH.Update)
 			r.Delete("/portal/{id}", portalH.Delete)
+
+			// Feature flags (superadmin check inside handler)
+			r.Get("/admin/flags", flagsH.List)
+			r.Patch("/admin/flags/{key}", flagsH.Set)
 
 			r.Get("/admin/users", userH.AdminList)
 			r.Get("/admin/users/{id}/stats", userH.AdminGetUserStats)

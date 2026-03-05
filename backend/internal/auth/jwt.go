@@ -14,24 +14,26 @@ const (
 
 type Claims struct {
 	UserID    int    `json:"uid"`
+	Username  string `json:"usr"`
 	IsAdmin   bool   `json:"adm"`
 	IsPremium bool   `json:"prm"`
 	Kind      string `json:"knd"` // "access" | "refresh"
 	jwt.RegisteredClaims
 }
 
-func NewAccessToken(secret string, userID int, isAdmin, isPremium bool) (string, error) {
-	return sign(secret, userID, isAdmin, isPremium, "access", AccessTokenDuration)
+func NewAccessToken(secret, username string, userID int, isAdmin, isPremium bool) (string, error) {
+	return sign(secret, username, userID, isAdmin, isPremium, "access", AccessTokenDuration)
 }
 
-func NewRefreshToken(secret string, userID int, isAdmin, isPremium bool) (string, error) {
-	return sign(secret, userID, isAdmin, isPremium, "refresh", RefreshTokenDuration)
+func NewRefreshToken(secret, username string, userID int, isAdmin, isPremium bool) (string, error) {
+	return sign(secret, username, userID, isAdmin, isPremium, "refresh", RefreshTokenDuration)
 }
 
-func sign(secret string, userID int, isAdmin, isPremium bool, kind string, dur time.Duration) (string, error) {
+func sign(secret, username string, userID int, isAdmin, isPremium bool, kind string, dur time.Duration) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		UserID:    userID,
+		Username:  username,
 		IsAdmin:   isAdmin,
 		IsPremium: isPremium,
 		Kind:      kind,

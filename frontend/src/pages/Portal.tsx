@@ -43,6 +43,7 @@ function LinkCard({
   onMoveDown,
   isFirst,
   isLast,
+  isAdmin,
 }: {
   link: PortalLink
   status: { ok: boolean; status_code: number } | undefined
@@ -52,6 +53,7 @@ function LinkCard({
   onMoveDown: () => void
   isFirst: boolean
   isLast: boolean
+  isAdmin: boolean
 }) {
   const icon = favicon(link.url)
   let displayUrl = link.url
@@ -59,22 +61,24 @@ function LinkCard({
 
   return (
     <div className="bg-[#1a1a1a] ring-1 ring-white/[0.06] rounded-xl p-4 flex items-center gap-3 group">
-      <div className="flex flex-col gap-0.5 flex-shrink-0">
-        <button
-          onClick={onMoveUp}
-          disabled={isFirst}
-          className="p-0.5 text-zinc-700 hover:text-zinc-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronUp size={13} />
-        </button>
-        <button
-          onClick={onMoveDown}
-          disabled={isLast}
-          className="p-0.5 text-zinc-700 hover:text-zinc-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronDown size={13} />
-        </button>
-      </div>
+      {isAdmin && (
+        <div className="flex flex-col gap-0.5 flex-shrink-0">
+          <button
+            onClick={onMoveUp}
+            disabled={isFirst}
+            className="p-0.5 text-zinc-700 hover:text-zinc-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronUp size={13} />
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={isLast}
+            className="p-0.5 text-zinc-700 hover:text-zinc-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronDown size={13} />
+          </button>
+        </div>
+      )}
       <a
         href={link.url}
         target="_blank"
@@ -95,14 +99,16 @@ function LinkCard({
       </a>
       <div className="flex items-center gap-3 flex-shrink-0">
         <StatusBadge status={status} />
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(link)} className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded">
-            <Pencil size={13} />
-          </button>
-          <button onClick={() => onDelete(link)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded">
-            <Trash2 size={13} />
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => onEdit(link)} className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded">
+              <Pencil size={13} />
+            </button>
+            <button onClick={() => onDelete(link)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded">
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -200,16 +206,18 @@ export default function Portal() {
   const [editing, setEditing] = useState<PortalLink | null | 'new'>(null)
   const [deleteTarget, setDeleteTarget] = useState<PortalLink | null>(null)
 
+  const canAccess = !!user?.is_admin || !user?.feature_flags?.portal || !!user?.is_premium
+
   const links = useQuery({
     queryKey: ['portal', 'links'],
     queryFn: () => portalApi.list().then(r => r.data),
-    enabled: !!user?.is_admin,
+    enabled: canAccess,
   })
 
   const statuses = useQuery({
     queryKey: ['portal', 'status'],
     queryFn: () => portalApi.status().then(r => r.data),
-    enabled: !!user?.is_admin && (links.data?.length ?? 0) > 0,
+    enabled: canAccess && (links.data?.length ?? 0) > 0,
     staleTime: 0,
     refetchOnWindowFocus: false,
   })
@@ -251,7 +259,7 @@ export default function Portal() {
     reorder.mutate(items.map(l => l.id))
   }
 
-  if (!user?.is_admin) return <Navigate to="/" replace />
+  if (!canAccess) return <Navigate to="/" replace />
 
   const handleSave = (data: { name: string; url: string; category: string }) => {
     if (editing === 'new') create.mutate(data)
@@ -262,13 +270,15 @@ export default function Portal() {
     <div className="space-y-8 max-w-2xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-white tracking-tight">Portal</h1>
-        <button
-          onClick={() => setEditing('new')}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-xs rounded-lg transition-colors"
-        >
-          <Plus size={13} />
-          Add link
-        </button>
+        {user?.is_admin && (
+          <button
+            onClick={() => setEditing('new')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-xs rounded-lg transition-colors"
+          >
+            <Plus size={13} />
+            Add link
+          </button>
+        )}
       </div>
 
       {links.isLoading && <p className="text-zinc-600 text-sm">Loading…</p>}
@@ -292,6 +302,7 @@ export default function Portal() {
                   onMoveDown={() => handleMove(l.id, 'down')}
                   isFirst={i === 0}
                   isLast={i === items.length - 1}
+                  isAdmin={!!user?.is_admin}
                 />
               ))}
             </div>
