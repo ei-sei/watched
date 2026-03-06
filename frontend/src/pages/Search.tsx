@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useSearch } from '@/hooks/useSearch'
 import { useCreateMedia } from '@/hooks/useMedia'
@@ -214,21 +214,11 @@ function SearchDetailSheet({ result, existing, onClose, onAdd, onNavigate, addin
 }
 
 export default function Search() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const query = searchParams.get('q') ?? ''
-  const tab = (searchParams.get('tab') ?? 'multi') as Tab
+  const [query, setQueryState] = useState<string>(() => sessionStorage.getItem('search_q') ?? '')
+  const [tab, setTabState] = useState<Tab>(() => (sessionStorage.getItem('search_tab') ?? 'multi') as Tab)
 
-  const setQuery = (q: string) => setSearchParams((prev) => {
-    const next = new URLSearchParams(prev)
-    if (q) next.set('q', q); else next.delete('q')
-    return next
-  }, { replace: true })
-
-  const setTab = (t: Tab) => setSearchParams((prev) => {
-    const next = new URLSearchParams(prev)
-    if (t !== 'multi') next.set('tab', t); else next.delete('tab')
-    return next
-  }, { replace: true })
+  const setQuery = (q: string) => { setQueryState(q); sessionStorage.setItem('search_q', q) }
+  const setTab = (t: Tab) => { setTabState(t); sessionStorage.setItem('search_tab', t) }
 
   const { data, isFetching } = useSearch(query, tab)
   const create = useCreateMedia()
