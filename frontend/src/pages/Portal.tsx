@@ -127,7 +127,7 @@ function LinkFormModal({
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [url, setUrl] = useState(initial?.url ?? '')
-  const [category, setCategory] = useState<string>(initial?.category ?? 'movies_tv')
+  const [category, setCategory] = useState<string>(initial?.category ?? 'sources')
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -165,7 +165,7 @@ function LinkFormModal({
           <div>
             <label className="block text-xs text-zinc-600 mb-1">Category</label>
             <div className="flex gap-2">
-              {(['movies_tv', 'anime'] as const).map(c => (
+              {(['sources', 'movies_tv', 'anime'] as const).map(c => (
                 <button
                   key={c}
                   type="button"
@@ -176,7 +176,7 @@ function LinkFormModal({
                       : 'bg-transparent border-white/[0.08] text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  {c === 'movies_tv' ? 'Movies & TV' : 'Anime'}
+                  {c === 'sources' ? 'Sources' : c === 'movies_tv' ? 'Movies & TV' : 'Anime'}
                 </button>
               ))}
             </div>
@@ -194,7 +194,8 @@ function LinkFormModal({
   )
 }
 
-const CATEGORIES: { key: 'movies_tv' | 'anime'; label: string }[] = [
+const CATEGORIES: { key: 'sources' | 'movies_tv' | 'anime'; label: string }[] = [
+  { key: 'sources',   label: 'Sources' },
   { key: 'movies_tv', label: 'Movies & TV Shows' },
   { key: 'anime',     label: 'Anime' },
 ]

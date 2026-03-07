@@ -4,7 +4,7 @@ export interface PortalLink {
   id: number
   name: string
   url: string
-  category: 'movies_tv' | 'anime'
+  category: 'sources' | 'movies_tv' | 'anime'
   created_by: number
   created_at: string
 }

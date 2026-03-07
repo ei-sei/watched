@@ -104,7 +104,7 @@ func (h *PortalHandler) Create(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	if body.Name == "" || body.URL == "" || (body.Category != "movies_tv" && body.Category != "anime") {
+	if body.Name == "" || body.URL == "" || (body.Category != "sources" && body.Category != "movies_tv" && body.Category != "anime") {
 		jsonErr(w, http.StatusBadRequest, "name, url, and valid category are required")
 		return
 	}
@@ -135,7 +135,7 @@ func (h *PortalHandler) Update(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	if body.Name == "" || body.URL == "" || (body.Category != "movies_tv" && body.Category != "anime") {
+	if body.Name == "" || body.URL == "" || (body.Category != "sources" && body.Category != "movies_tv" && body.Category != "anime") {
 		jsonErr(w, http.StatusBadRequest, "name, url, and valid category are required")
 		return
 	}
