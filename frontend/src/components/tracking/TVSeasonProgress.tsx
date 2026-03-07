@@ -10,24 +10,54 @@ interface Season {
   episode_count: number
 }
 
+type DayGroup = {
+  date: string
+  watched_at: string
+  episodes: number[]
+}
+
+function groupByDay(stamps: EpisodeStamp[]): DayGroup[] {
+  const map = new Map<string, DayGroup>()
+  for (const s of stamps) {
+    const day = s.watched_at.slice(0, 10)
+    if (!map.has(day)) map.set(day, { date: day, watched_at: s.watched_at, episodes: [] })
+    map.get(day)!.episodes.push(s.episode)
+  }
+  return Array.from(map.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(g => ({ ...g, episodes: g.episodes.sort((a, b) => a - b) }))
+}
+
+function epLabel(episodes: number[]): string {
+  if (episodes.length === 1) return `Ep ${episodes[0]}`
+  const isConsecutive = episodes.every((ep, i) => i === 0 || ep === episodes[i - 1] + 1)
+  if (isConsecutive) return `Ep ${episodes[0]}–${episodes[episodes.length - 1]}`
+  if (episodes.length <= 4) return `Ep ${episodes.join(', ')}`
+  return `Ep ${episodes[0]}, ${episodes[1]} +${episodes.length - 2} more`
+}
+
 function StampedBar({
   pct,
   stamps,
-  totalEps,
   color = 'bg-indigo-500',
   height = 'h-1.5',
 }: {
   pct: number
   stamps: EpisodeStamp[]
-  totalEps: number
   color?: string
   height?: string
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(null)
 
-  const dots = totalEps >= 24
-    ? stamps.length > 0 ? [stamps[stamps.length - 1]] : []
-    : stamps
+  const groups = groupByDay(stamps)
+
+  const timestamps = groups.map(g => new Date(g.watched_at).getTime())
+  const minTs = timestamps.length > 0 ? Math.min(...timestamps) : 0
+  const maxTs = timestamps.length > 0 ? Math.max(...timestamps) : 0
+  const span = maxTs - minTs
+
+  const getLeftPct = (watched_at: string) =>
+    span === 0 ? 50 : ((new Date(watched_at).getTime() - minTs) / span) * 100
 
   return (
     <div className="relative h-4">
@@ -35,24 +65,22 @@ function StampedBar({
         <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
       </div>
 
-      {totalEps > 0 && dots.map((s) => {
-        const key = `${s.season}-${s.episode}`
-        // Centre each dot within its episode slot for even visual spacing
-        const leftPct = ((s.episode - 0.5) / totalEps) * 100
-        const isActive = activeKey === key
+      {groups.map((g) => {
+        const leftPct = getLeftPct(g.watched_at)
+        const isActive = activeKey === g.date
         return (
           <div
-            key={key}
+            key={g.date}
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 cursor-pointer"
             style={{ left: `${leftPct}%` }}
-            onMouseEnter={() => setActiveKey(key)}
+            onMouseEnter={() => setActiveKey(g.date)}
             onMouseLeave={() => setActiveKey(null)}
-            onClick={() => setActiveKey(isActive ? null : key)}
+            onClick={() => setActiveKey(isActive ? null : g.date)}
           >
             <div className={`w-1.5 h-1.5 rounded-full bg-white/90 border border-black/20 transition-transform ${isActive ? 'scale-125' : ''}`} />
             {isActive && (
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap bg-zinc-800 text-zinc-100 text-[10px] px-2 py-1 rounded shadow-lg z-10 pointer-events-none">
-                Ep {s.episode} · {formatDate(s.watched_at)}
+                {epLabel(g.episodes)} · {formatDate(g.watched_at)}
               </div>
             )}
           </div>
@@ -96,7 +124,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
           <span>{totalWatched} / {totalEps > 0 ? totalEps : unknownLabel} episodes watched</span>
           {totalEps > 0 && <span>{pct}%</span>}
         </div>
-        <StampedBar pct={pct} stamps={stamps} totalEps={totalEps} />
+        <StampedBar pct={pct} stamps={stamps} />
       </div>
     )
   }
@@ -110,7 +138,7 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
           <span>Overall</span>
           <span>{totalWatched} / {totalEps > 0 ? totalEps : unknownLabel} episodes</span>
         </div>
-        <StampedBar pct={overallPct} stamps={stamps} totalEps={totalEps} />
+        <StampedBar pct={overallPct} stamps={stamps} />
       </div>
 
       {item.media_type !== 'anime' && seasons.map((s) => {
@@ -127,7 +155,6 @@ export default function TVSeasonProgress({ item }: { item: MediaItem }) {
             <StampedBar
               pct={pct}
               stamps={seasonStamps}
-              totalEps={s.episode_count}
               color={done ? 'bg-green-500' : 'bg-indigo-400'}
               height="h-1"
             />
