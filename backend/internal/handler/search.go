@@ -206,7 +206,7 @@ func (h *SearchHandler) searchTMDB(ctx context.Context, q string) ([]models.Sear
 }
 
 func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]models.SearchResult, error) {
-	u := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&limit=10&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median,publisher",
+	u := fmt.Sprintf("https://openlibrary.org/search.json?q=%s&limit=20&fields=key,title,author_name,first_publish_year,cover_i,number_of_pages_median,publisher",
 		url.QueryEscape(q))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -262,7 +262,7 @@ func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]mode
 }
 
 func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]models.SearchResult, error) {
-	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=10", url.QueryEscape(q))
+	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=40", url.QueryEscape(q))
 	if h.cfg.GoogleBooksKey != "" {
 		apiURL += "&key=" + h.cfg.GoogleBooksKey
 	}
