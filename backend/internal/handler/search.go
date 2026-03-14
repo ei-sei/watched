@@ -262,7 +262,9 @@ func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]mode
 }
 
 func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]models.SearchResult, error) {
-	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=40", url.QueryEscape(q))
+	// intitle: restricts matching to the title field, which gives far more
+	// relevant results for book series searches than a full-text query.
+	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=intitle:%s&maxResults=40", url.QueryEscape(q))
 	if h.cfg.GoogleBooksKey != "" {
 		apiURL += "&key=" + h.cfg.GoogleBooksKey
 	}
