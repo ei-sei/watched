@@ -262,78 +262,115 @@ func (h *SearchHandler) searchOpenLibrary(ctx context.Context, q string) ([]mode
 }
 
 func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]models.SearchResult, error) {
-	// intitle: restricts matching to the title field, which gives far more
-	// relevant results for book series searches than a full-text query.
-	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=intitle:%s&maxResults=40", url.QueryEscape(q))
-	if h.cfg.GoogleBooksKey != "" {
-		apiURL += "&key=" + h.cfg.GoogleBooksKey
+	// Run two queries in parallel:
+	// 1. intitle: with a cleaned query (colons break Google's field parser)
+	// 2. broad q= search as fallback to catch anything intitle misses
+	// Results are merged and deduped by volume ID.
+
+	// Clean query for intitle: — colons are parsed as field separators by Google
+	cleanQ := strings.NewReplacer(":", " ", "(", " ", ")", " ").Replace(q)
+	cleanQ = strings.Join(strings.Fields(cleanQ), " ")
+
+	type fetchResult struct {
+		items []models.SearchResult
+		err   error
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("google books: build request: %w", err)
-	}
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google books: status %d", resp.StatusCode)
+	fetchURL := func(apiURL string) fetchResult {
+		if h.cfg.GoogleBooksKey != "" {
+			apiURL += "&key=" + h.cfg.GoogleBooksKey
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		if err != nil {
+			return fetchResult{err: err}
+		}
+		resp, err := h.client.Do(req)
+		if err != nil {
+			return fetchResult{err: err}
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fetchResult{err: fmt.Errorf("google books: status %d", resp.StatusCode)}
+		}
+
+		var raw struct {
+			Items []struct {
+				ID         string `json:"id"`
+				VolumeInfo struct {
+					Title         string   `json:"title"`
+					Authors       []string `json:"authors"`
+					PublishedDate string   `json:"publishedDate"`
+					Publisher     string   `json:"publisher"`
+					Description   string   `json:"description"`
+					PageCount     *int     `json:"pageCount"`
+					ImageLinks    *struct {
+						Thumbnail string `json:"thumbnail"`
+					} `json:"imageLinks"`
+				} `json:"volumeInfo"`
+			} `json:"items"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+			return fetchResult{err: err}
+		}
+
+		var items []models.SearchResult
+		for _, item := range raw.Items {
+			vi := item.VolumeInfo
+			var year *int
+			if len(vi.PublishedDate) >= 4 {
+				var y int
+				fmt.Sscanf(vi.PublishedDate[:4], "%d", &y)
+				year = &y
+			}
+			var poster *string
+			if vi.ImageLinks != nil {
+				s := strings.Replace(vi.ImageLinks.Thumbnail, "http://", "https://", 1)
+				poster = &s
+			}
+			desc := vi.Description
+			extra := map[string]any{"authors": vi.Authors}
+			if vi.PageCount != nil && *vi.PageCount > 0 {
+				extra["page_count"] = *vi.PageCount
+			}
+			if vi.Publisher != "" {
+				extra["publisher"] = vi.Publisher
+			}
+			items = append(items, models.SearchResult{
+				Source:      "googlebooks",
+				MediaType:   string(models.MediaTypeBook),
+				ExternalID:  "gb:" + item.ID,
+				Title:       vi.Title,
+				Year:        year,
+				PosterURL:   poster,
+				Description: &desc,
+				Extra:       extra,
+			})
+		}
+		return fetchResult{items: items}
 	}
 
-	var raw struct {
-		Items []struct {
-			ID         string `json:"id"`
-			VolumeInfo struct {
-				Title               string   `json:"title"`
-				Authors             []string `json:"authors"`
-				PublishedDate       string   `json:"publishedDate"`
-				Publisher           string   `json:"publisher"`
-				Description         string   `json:"description"`
-				PageCount           *int     `json:"pageCount"`
-				ImageLinks          *struct {
-					Thumbnail string `json:"thumbnail"`
-				} `json:"imageLinks"`
-			} `json:"volumeInfo"`
-		} `json:"items"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, err
-	}
+	ch := make(chan fetchResult, 2)
+	go func() {
+		ch <- fetchURL(fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=intitle:%s&maxResults=40", url.QueryEscape(cleanQ)))
+	}()
+	go func() {
+		ch <- fetchURL(fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=20", url.QueryEscape(q)))
+	}()
 
+	seen := make(map[string]struct{})
 	var out []models.SearchResult
-	for _, item := range raw.Items {
-		vi := item.VolumeInfo
-		var year *int
-		if len(vi.PublishedDate) >= 4 {
-			var y int
-			fmt.Sscanf(vi.PublishedDate[:4], "%d", &y)
-			year = &y
+	for range 2 {
+		res := <-ch
+		if res.err != nil {
+			continue
 		}
-		var poster *string
-		if vi.ImageLinks != nil {
-			s := strings.Replace(vi.ImageLinks.Thumbnail, "http://", "https://", 1)
-			poster = &s
+		for _, item := range res.items {
+			if _, dup := seen[item.ExternalID]; dup {
+				continue
+			}
+			seen[item.ExternalID] = struct{}{}
+			out = append(out, item)
 		}
-		desc := vi.Description
-		extra := map[string]any{"authors": vi.Authors}
-		if vi.PageCount != nil && *vi.PageCount > 0 {
-			extra["page_count"] = *vi.PageCount
-		}
-		if vi.Publisher != "" {
-			extra["publisher"] = vi.Publisher
-		}
-		out = append(out, models.SearchResult{
-			Source:      "googlebooks",
-			MediaType:   string(models.MediaTypeBook),
-			ExternalID:  "gb:" + item.ID,
-			Title:       vi.Title,
-			Year:        year,
-			PosterURL:   poster,
-			Description: &desc,
-			Extra:       extra,
-		})
 	}
 	return out, nil
 }
