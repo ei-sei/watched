@@ -4,7 +4,7 @@ import { portalApi, type PortalLink } from '@/api/portal'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { Navigate } from 'react-router-dom'
-import { Plus, Pencil, Trash2, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, ChevronUp, ChevronDown, Star } from 'lucide-react'
 
 function favicon(url: string) {
   try {
@@ -41,6 +41,7 @@ function LinkCard({
   onDelete,
   onMoveUp,
   onMoveDown,
+  onStar,
   isFirst,
   isLast,
   isAdmin,
@@ -51,6 +52,7 @@ function LinkCard({
   onDelete: (l: PortalLink) => void
   onMoveUp: () => void
   onMoveDown: () => void
+  onStar: (l: PortalLink) => void
   isFirst: boolean
   isLast: boolean
   isAdmin: boolean
@@ -93,7 +95,12 @@ function LinkCard({
           )}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-zinc-200">{link.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-zinc-200">{link.name}</p>
+            {link.is_starred && (
+              <Star size={11} className="text-amber-400 fill-amber-400 flex-shrink-0" />
+            )}
+          </div>
           <p className="text-xs text-zinc-600 truncate">{displayUrl}</p>
         </div>
       </a>
@@ -101,6 +108,13 @@ function LinkCard({
         <StatusBadge status={status} />
         {isAdmin && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onStar(link)}
+              className={`p-1.5 transition-colors rounded ${link.is_starred ? 'text-amber-400 hover:text-zinc-400' : 'text-zinc-600 hover:text-amber-400'}`}
+              title={link.is_starred ? 'Unstar' : 'Star'}
+            >
+              <Star size={13} className={link.is_starred ? 'fill-amber-400' : ''} />
+            </button>
             <button onClick={() => onEdit(link)} className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded">
               <Pencil size={13} />
             </button>
@@ -249,6 +263,13 @@ export default function Portal() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'links'] }),
   })
 
+  const starMutation = useMutation({
+    mutationFn: (link: PortalLink) =>
+      link.is_starred ? portalApi.unstar(link.id) : portalApi.star(link.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'links'] }),
+    onError: () => show('Failed to update star', 'error'),
+  })
+
   const handleMove = (id: number, direction: 'up' | 'down') => {
     if (!links.data) return
     const items = [...links.data]
@@ -304,6 +325,7 @@ export default function Portal() {
                   isFirst={i === 0}
                   isLast={i === items.length - 1}
                   isAdmin={!!user?.is_admin}
+                  onStar={(l) => starMutation.mutate(l)}
                 />
               ))}
             </div>

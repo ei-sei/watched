@@ -13,6 +13,7 @@ type PortalLink struct {
 	URL       string    `json:"url"`
 	Category  string    `json:"category"`
 	Position  int       `json:"position"`
+	IsStarred bool      `json:"is_starred"`
 	CreatedBy int       `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -23,8 +24,8 @@ func NewPortalRepo(db *pgxpool.Pool) *PortalRepo { return &PortalRepo{db: db} }
 
 func (r *PortalRepo) List(ctx context.Context) ([]PortalLink, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, name, url, category, position, created_by, created_at
-		 FROM portal_links ORDER BY position, id`)
+		`SELECT id, name, url, category, position, is_starred, created_by, created_at
+		 FROM portal_links ORDER BY category, is_starred DESC, position, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +34,7 @@ func (r *PortalRepo) List(ctx context.Context) ([]PortalLink, error) {
 	var links []PortalLink
 	for rows.Next() {
 		var l PortalLink
-		if err := rows.Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.CreatedBy, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.CreatedBy, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		links = append(links, l)
@@ -65,9 +66,9 @@ func (r *PortalRepo) Create(ctx context.Context, name, url, category string, cre
 	err := r.db.QueryRow(ctx,
 		`INSERT INTO portal_links (name, url, category, created_by, position)
 		 VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(position) + 1 FROM portal_links), 0))
-		 RETURNING id, name, url, category, position, created_by, created_at`,
+		 RETURNING id, name, url, category, position, is_starred, created_by, created_at`,
 		name, url, category, createdBy,
-	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.CreatedBy, &l.CreatedAt)
+	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.CreatedBy, &l.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +80,38 @@ func (r *PortalRepo) Update(ctx context.Context, id int, name, url, category str
 	err := r.db.QueryRow(ctx,
 		`UPDATE portal_links SET name = $2, url = $3, category = $4
 		 WHERE id = $1
-		 RETURNING id, name, url, category, position, created_by, created_at`,
+		 RETURNING id, name, url, category, position, is_starred, created_by, created_at`,
 		id, name, url, category,
-	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.CreatedBy, &l.CreatedAt)
+	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.CreatedBy, &l.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &l, nil
+}
+
+func (r *PortalRepo) Star(ctx context.Context, id int) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var category string
+	if err := tx.QueryRow(ctx, `SELECT category FROM portal_links WHERE id = $1`, id).Scan(&category); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE portal_links SET is_starred = FALSE WHERE category = $1`, category); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE portal_links SET is_starred = TRUE WHERE id = $1`, id); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *PortalRepo) Unstar(ctx context.Context, id int) error {
+	_, err := r.db.Exec(ctx, `UPDATE portal_links SET is_starred = FALSE WHERE id = $1`, id)
+	return err
 }
 
 func (r *PortalRepo) Delete(ctx context.Context, id int) error {

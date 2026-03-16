@@ -5,6 +5,7 @@ export interface PortalLink {
   name: string
   url: string
   category: 'sources' | 'movies_tv' | 'anime'
+  is_starred: boolean
   created_by: number
   created_at: string
 }
@@ -24,4 +25,6 @@ export const portalApi = {
     client.patch<PortalLink>(`/portal/${id}`, data),
   delete: (id: number) => client.delete(`/portal/${id}`),
   reorder: (ids: number[]) => client.put('/portal/reorder', { ids }),
+  star: (id: number) => client.put(`/portal/${id}/star`, {}),
+  unstar: (id: number) => client.delete(`/portal/${id}/star`),
 }

@@ -161,3 +161,31 @@ func (h *PortalHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// PUT /portal/{id}/star
+func (h *PortalHandler) Star(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.portal.Star(r.Context(), id); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /portal/{id}/star
+func (h *PortalHandler) Unstar(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.portal.Unstar(r.Context(), id); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

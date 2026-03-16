@@ -189,6 +189,8 @@ func main() {
 			r.Put("/portal/reorder", portalH.Reorder)
 			r.Patch("/portal/{id}", portalH.Update)
 			r.Delete("/portal/{id}", portalH.Delete)
+			r.Put("/portal/{id}/star", portalH.Star)
+			r.Delete("/portal/{id}/star", portalH.Unstar)
 
 			// Feature flags (superadmin check inside handler)
 			r.Get("/admin/flags", flagsH.List)
