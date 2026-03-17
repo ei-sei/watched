@@ -33,5 +33,6 @@ export function useTrending(category: TrendingCategory) {
       return data
     },
     staleTime: STALE_TIME[category],
+    retry: false,
   })
 }

@@ -72,11 +72,20 @@ export default function Trending() {
 }
 
 function TrendingContent({ category, onSelect }: { category: TrendingCategory; onSelect: (item: TrendingItem) => void }) {
-  const { data, isLoading, isError } = useTrending(category)
+  const { data, isLoading, isError, refetch, isFetching } = useTrending(category)
 
   if (isLoading) return <LoadingSpinner />
-  if (isError) return (
-    <p className="text-sm text-zinc-600 text-center py-8">Failed to load trending data</p>
+  if (isError || (data && !data.some(s => s.items.length > 0))) return (
+    <div className="flex flex-col items-center gap-3 py-12">
+      <p className="text-sm text-zinc-600">Failed to load trending data</p>
+      <button
+        onClick={() => refetch()}
+        disabled={isFetching}
+        className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white bg-white/[0.06] hover:bg-white/[0.10] rounded-lg transition-colors disabled:opacity-40"
+      >
+        {isFetching ? 'Loading…' : 'Try again'}
+      </button>
+    </div>
   )
   if (!data?.length) return null
 
