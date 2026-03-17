@@ -99,8 +99,15 @@ func (h *TrendingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		sections, err = h.fetchTMDB(r.Context(), "tv")
 	case "anime":
 		sections, err = h.fetchAniList(r.Context())
+		if err != nil || sectionsEmpty(sections) {
+			sections, err = h.fetchJikanTrending(r.Context())
+		}
 	}
 	if err != nil {
+		jsonErr(w, http.StatusBadGateway, "failed to fetch trending data")
+		return
+	}
+	if sectionsEmpty(sections) {
 		jsonErr(w, http.StatusBadGateway, "failed to fetch trending data")
 		return
 	}
@@ -252,6 +259,9 @@ func (h *TrendingHandler) fetchAniList(ctx context.Context) ([]TrendingSection, 
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
+	if len(raw.Data.Trending.Media) == 0 && len(raw.Data.Seasonal.Media) == 0 {
+		return nil, fmt.Errorf("anilist: returned no data (may be rate-limited or down)")
+	}
 
 	return []TrendingSection{
 		{
@@ -296,6 +306,79 @@ func mapAniListItems(media []aniListMedia) []TrendingItem {
 		})
 	}
 	return items
+}
+
+func sectionsEmpty(sections []TrendingSection) bool {
+	for _, s := range sections {
+		if len(s.Items) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (h *TrendingHandler) fetchJikanTrending(ctx context.Context) ([]TrendingSection, error) {
+	type jikanAnime struct {
+		MalID   int    `json:"mal_id"`
+		Title   string `json:"title"`
+		Year    int    `json:"year"`
+		Score   float64 `json:"score"`
+		Images  struct {
+			JPG struct {
+				LargeImageURL string `json:"large_image_url"`
+			} `json:"jpg"`
+		} `json:"images"`
+		Synopsis string `json:"synopsis"`
+	}
+	type jikanResp struct {
+		Data []jikanAnime `json:"data"`
+	}
+
+	fetch := func(url string) ([]TrendingItem, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := h.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		var raw jikanResp
+		if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+			return nil, err
+		}
+		items := make([]TrendingItem, 0, len(raw.Data))
+		for _, a := range raw.Data {
+			items = append(items, TrendingItem{
+				ID:         a.MalID,
+				Title:      a.Title,
+				Poster:     a.Images.JPG.LargeImageURL,
+				Score:      a.Score,
+				Year:       a.Year,
+				ExternalID: fmt.Sprintf("mal:%d", a.MalID),
+				MediaType:  "anime",
+				Synopsis:   a.Synopsis,
+			})
+		}
+		return items, nil
+	}
+
+	curSeason, curYear := currentAniListSeason()
+	nxtSeason, nxtYear := advanceAniListSeason(curSeason, curYear)
+
+	trending, err := fetch("https://api.jikan.moe/v4/top/anime?filter=airing&limit=20")
+	if err != nil {
+		return nil, err
+	}
+	seasonal, _ := fetch("https://api.jikan.moe/v4/seasons/now?limit=20")
+	upcoming, _ := fetch("https://api.jikan.moe/v4/seasons/upcoming?limit=20")
+
+	return []TrendingSection{
+		{Label: "Trending Now", Items: trending},
+		{Label: fmt.Sprintf("Popular This Season (%s %d)", aniListSeasonName(curSeason), curYear), Items: seasonal},
+		{Label: fmt.Sprintf("Upcoming (%s %d)", aniListSeasonName(nxtSeason), nxtYear), Items: upcoming},
+	}, nil
 }
 
 func currentAniListSeason() (season string, year int) {
