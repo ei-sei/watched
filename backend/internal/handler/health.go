@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +51,37 @@ func (h *HealthHandler) pingService(name, url string) ServiceStatus {
 	return s
 }
 
+func (h *HealthHandler) probeAniList() ServiceStatus {
+	body := `{"query":"{ Page(page:1,perPage:1) { media(type:ANIME) { id } } }"}`
+	start := time.Now()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost,
+		"https://graphql.anilist.co", strings.NewReader(body))
+	if err != nil {
+		return ServiceStatus{Name: "AniList", OK: false, Error: "bad url"}
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.client.Do(req)
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		return ServiceStatus{Name: "AniList", OK: false, LatencyMS: latency, Error: "unreachable"}
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data   any `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ServiceStatus{Name: "AniList", OK: false, LatencyMS: latency, Error: "bad response"}
+	}
+	if len(result.Errors) > 0 {
+		return ServiceStatus{Name: "AniList", OK: false, LatencyMS: latency, Error: result.Errors[0].Message}
+	}
+	return ServiceStatus{Name: "AniList", OK: result.Data != nil, LatencyMS: latency}
+}
+
 // GET /admin/health
 func (h *HealthHandler) ExternalServices(w http.ResponseWriter, r *http.Request) {
 	type check struct {
@@ -78,11 +111,8 @@ func (h *HealthHandler) ExternalServices(w http.ResponseWriter, r *http.Request)
 			url:  "https://openlibrary.org/api/books?bibkeys=ISBN:9780140328721&format=json",
 			skip: false,
 		},
-		{
-			name: "AniList",
-			url:  "https://graphql.anilist.co",
-			skip: false,
-		},
+		// AniList is checked separately via a real GraphQL probe below.
+
 	}
 
 	results := make([]ServiceStatus, len(checks))
@@ -98,6 +128,15 @@ func (h *HealthHandler) ExternalServices(w http.ResponseWriter, r *http.Request)
 			results[i] = h.pingService(c.name, c.url)
 		}(i, c)
 	}
+
+	// AniList requires a real GraphQL probe — a GET returns 403/405 even when
+	// the API is disabled, so a ping would show false-positive green.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		results = append(results, h.probeAniList())
+	}()
+
 	wg.Wait()
 
 	jsonOK(w, results)
