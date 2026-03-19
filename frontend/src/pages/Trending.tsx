@@ -7,7 +7,7 @@ import { useCreateMedia } from '@/hooks/useMedia'
 import { useToast } from '@/components/ui/Toast'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { db } from '@/offline/db'
-import { Lock, TrendingUp, X } from 'lucide-react'
+import { Lock, TrendingUp, X, RefreshCw } from 'lucide-react'
 
 const TABS: { key: TrendingCategory; label: string }[] = [
   { key: 'anime',  label: 'Anime'    },
@@ -19,6 +19,7 @@ export default function Trending() {
   const { user } = useAuth()
   const [tab, setTab] = useState<TrendingCategory>('anime')
   const [selected, setSelected] = useState<TrendingItem | null>(null)
+  const { data, isLoading, isError, refetch, isFetching } = useTrending(tab)
 
   if (!user?.is_premium && !user?.is_admin) {
     return (
@@ -43,7 +44,17 @@ export default function Trending() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold text-white tracking-tight">Trending</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-white tracking-tight">Trending</h1>
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-40"
+          title="Refresh"
+        >
+          <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+        </button>
+      </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-white/[0.04] rounded-lg p-1 max-w-sm">
@@ -62,7 +73,7 @@ export default function Trending() {
         ))}
       </div>
 
-      <TrendingContent category={tab} onSelect={setSelected} />
+      <TrendingContent data={data} isLoading={isLoading} isError={isError} onSelect={setSelected} />
 
       {selected && (
         <AddModal item={selected} onClose={() => setSelected(null)} />
@@ -71,21 +82,15 @@ export default function Trending() {
   )
 }
 
-function TrendingContent({ category, onSelect }: { category: TrendingCategory; onSelect: (item: TrendingItem) => void }) {
-  const { data, isLoading, isError, refetch, isFetching } = useTrending(category)
-
+function TrendingContent({ data, isLoading, isError, onSelect }: {
+  data: TrendingSection[] | undefined
+  isLoading: boolean
+  isError: boolean
+  onSelect: (item: TrendingItem) => void
+}) {
   if (isLoading) return <LoadingSpinner />
   if (isError || (data && !data.some(s => s.items.length > 0))) return (
-    <div className="flex flex-col items-center gap-3 py-12">
-      <p className="text-sm text-zinc-600">Failed to load trending data</p>
-      <button
-        onClick={() => refetch()}
-        disabled={isFetching}
-        className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white bg-white/[0.06] hover:bg-white/[0.10] rounded-lg transition-colors disabled:opacity-40"
-      >
-        {isFetching ? 'Loading…' : 'Try again'}
-      </button>
-    </div>
+    <p className="text-sm text-zinc-600 text-center py-12">Failed to load trending data — use the refresh button to try again</p>
   )
   if (!data?.length) return null
 
