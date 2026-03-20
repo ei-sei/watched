@@ -6,6 +6,7 @@ export interface PortalLink {
   url: string
   category: 'sources' | 'movies_tv' | 'anime'
   is_starred: boolean
+  note?: string | null
   created_by: number
   created_at: string
 }
@@ -19,9 +20,9 @@ export interface PortalStatus {
 export const portalApi = {
   list: () => client.get<PortalLink[]>('/portal'),
   status: () => client.get<PortalStatus[]>('/portal/status'),
-  create: (data: { name: string; url: string; category: string }) =>
+  create: (data: { name: string; url: string; category: string; note?: string | null }) =>
     client.post<PortalLink>('/portal', data),
-  update: (id: number, data: { name: string; url: string; category: string }) =>
+  update: (id: number, data: { name: string; url: string; category: string; note?: string | null }) =>
     client.patch<PortalLink>(`/portal/${id}`, data),
   delete: (id: number) => client.delete(`/portal/${id}`),
   reorder: (ids: number[]) => client.put('/portal/reorder', { ids }),

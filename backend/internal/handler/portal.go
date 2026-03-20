@@ -96,9 +96,10 @@ func (h *PortalHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 // POST /portal
 func (h *PortalHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name     string `json:"name"`
-		URL      string `json:"url"`
-		Category string `json:"category"`
+		Name     string  `json:"name"`
+		URL      string  `json:"url"`
+		Category string  `json:"category"`
+		Note     *string `json:"note"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
@@ -108,9 +109,13 @@ func (h *PortalHandler) Create(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "name, url, and valid category are required")
 		return
 	}
+	if body.Note != nil && len(*body.Note) > 300 {
+		jsonErr(w, http.StatusBadRequest, "note must be 300 characters or fewer")
+		return
+	}
 
 	claims := auth.ClaimsFrom(r.Context())
-	link, err := h.portal.Create(r.Context(), body.Name, body.URL, body.Category, claims.UserID)
+	link, err := h.portal.Create(r.Context(), body.Name, body.URL, body.Category, body.Note, claims.UserID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
@@ -127,9 +132,10 @@ func (h *PortalHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Name     string `json:"name"`
-		URL      string `json:"url"`
-		Category string `json:"category"`
+		Name     string  `json:"name"`
+		URL      string  `json:"url"`
+		Category string  `json:"category"`
+		Note     *string `json:"note"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
@@ -139,8 +145,12 @@ func (h *PortalHandler) Update(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "name, url, and valid category are required")
 		return
 	}
+	if body.Note != nil && len(*body.Note) > 300 {
+		jsonErr(w, http.StatusBadRequest, "note must be 300 characters or fewer")
+		return
+	}
 
-	link, err := h.portal.Update(r.Context(), id, body.Name, body.URL, body.Category)
+	link, err := h.portal.Update(r.Context(), id, body.Name, body.URL, body.Category, body.Note)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return

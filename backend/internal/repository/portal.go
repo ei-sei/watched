@@ -14,6 +14,7 @@ type PortalLink struct {
 	Category  string    `json:"category"`
 	Position  int       `json:"position"`
 	IsStarred bool      `json:"is_starred"`
+	Note      *string   `json:"note"`
 	CreatedBy int       `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -24,7 +25,7 @@ func NewPortalRepo(db *pgxpool.Pool) *PortalRepo { return &PortalRepo{db: db} }
 
 func (r *PortalRepo) List(ctx context.Context) ([]PortalLink, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, name, url, category, position, is_starred, created_by, created_at
+		`SELECT id, name, url, category, position, is_starred, note, created_by, created_at
 		 FROM portal_links ORDER BY category, is_starred DESC, position, id`)
 	if err != nil {
 		return nil, err
@@ -34,7 +35,7 @@ func (r *PortalRepo) List(ctx context.Context) ([]PortalLink, error) {
 	var links []PortalLink
 	for rows.Next() {
 		var l PortalLink
-		if err := rows.Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.CreatedBy, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.Note, &l.CreatedBy, &l.CreatedAt); err != nil {
 			return nil, err
 		}
 		links = append(links, l)
@@ -61,28 +62,28 @@ func (r *PortalRepo) Reorder(ctx context.Context, ids []int) error {
 	return tx.Commit(ctx)
 }
 
-func (r *PortalRepo) Create(ctx context.Context, name, url, category string, createdBy int) (*PortalLink, error) {
+func (r *PortalRepo) Create(ctx context.Context, name, url, category string, note *string, createdBy int) (*PortalLink, error) {
 	var l PortalLink
 	err := r.db.QueryRow(ctx,
-		`INSERT INTO portal_links (name, url, category, created_by, position)
-		 VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(position) + 1 FROM portal_links), 0))
-		 RETURNING id, name, url, category, position, is_starred, created_by, created_at`,
-		name, url, category, createdBy,
-	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.CreatedBy, &l.CreatedAt)
+		`INSERT INTO portal_links (name, url, category, note, created_by, position)
+		 VALUES ($1, $2, $3, $4, $5, COALESCE((SELECT MAX(position) + 1 FROM portal_links), 0))
+		 RETURNING id, name, url, category, position, is_starred, note, created_by, created_at`,
+		name, url, category, note, createdBy,
+	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.Note, &l.CreatedBy, &l.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &l, nil
 }
 
-func (r *PortalRepo) Update(ctx context.Context, id int, name, url, category string) (*PortalLink, error) {
+func (r *PortalRepo) Update(ctx context.Context, id int, name, url, category string, note *string) (*PortalLink, error) {
 	var l PortalLink
 	err := r.db.QueryRow(ctx,
-		`UPDATE portal_links SET name = $2, url = $3, category = $4
+		`UPDATE portal_links SET name = $2, url = $3, category = $4, note = $5
 		 WHERE id = $1
-		 RETURNING id, name, url, category, position, is_starred, created_by, created_at`,
-		id, name, url, category,
-	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.CreatedBy, &l.CreatedAt)
+		 RETURNING id, name, url, category, position, is_starred, note, created_by, created_at`,
+		id, name, url, category, note,
+	).Scan(&l.ID, &l.Name, &l.URL, &l.Category, &l.Position, &l.IsStarred, &l.Note, &l.CreatedBy, &l.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

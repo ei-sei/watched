@@ -102,6 +102,9 @@ function LinkCard({
             )}
           </div>
           <p className="text-xs text-zinc-600 truncate">{displayUrl}</p>
+          {link.note && (
+            <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2 leading-relaxed">{link.note}</p>
+          )}
         </div>
       </a>
       <div className="flex items-center gap-3 flex-shrink-0">
@@ -136,17 +139,18 @@ function LinkFormModal({
 }: {
   initial?: PortalLink
   onClose: () => void
-  onSave: (data: { name: string; url: string; category: string }) => void
+  onSave: (data: { name: string; url: string; category: string; note?: string | null }) => void
   saving: boolean
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [url, setUrl] = useState(initial?.url ?? '')
   const [category, setCategory] = useState<string>(initial?.category ?? 'sources')
+  const [note, setNote] = useState(initial?.note ?? '')
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !url.trim()) return
-    onSave({ name: name.trim(), url: url.trim(), category })
+    onSave({ name: name.trim(), url: url.trim(), category, note: note.trim() || null })
   }
 
   return (
@@ -174,6 +178,17 @@ function LinkFormModal({
               onChange={e => setUrl(e.target.value)}
               placeholder="https://..."
               className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-600 mb-1">Note <span className="text-zinc-700">(optional)</span></label>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              maxLength={300}
+              rows={2}
+              placeholder="e.g. use this for seasonal anime"
+              className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm resize-none"
             />
           </div>
           <div>
@@ -283,7 +298,7 @@ export default function Portal() {
 
   if (!canAccess) return <Navigate to="/" replace />
 
-  const handleSave = (data: { name: string; url: string; category: string }) => {
+  const handleSave = (data: { name: string; url: string; category: string; note?: string | null }) => {
     if (editing === 'new') create.mutate(data)
     else if (editing) update.mutate({ id: editing.id, data })
   }
