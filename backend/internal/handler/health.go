@@ -43,7 +43,7 @@ func (h *HealthHandler) pingService(name, url string) ServiceStatus {
 		return ServiceStatus{Name: name, OK: false, LatencyMS: latency, Error: "unreachable"}
 	}
 	resp.Body.Close()
-	ok := resp.StatusCode < 500
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
 	s := ServiceStatus{Name: name, OK: ok, LatencyMS: latency}
 	if !ok {
 		s.Error = fmt.Sprintf("HTTP %d", resp.StatusCode)
