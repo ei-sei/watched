@@ -69,6 +69,8 @@ export const adminApi = {
   updateFlags: (id: number, flags: { is_admin?: boolean; is_premium?: boolean }) =>
     client.patch<AdminUser>(`/admin/users/${id}/flags`, flags),
   deleteUser: (id: number) => client.delete(`/admin/users/${id}`),
+  resetPassword: (id: number, password: string) =>
+    client.post(`/admin/users/${id}/reset-password`, { password }),
   listInvites: () => client.get<InviteCode[]>('/admin/invites'),
   createInvite: (code: string) => client.post<{ code: string }>('/admin/invites', { code }),
   deleteInvite: (code: string) => client.delete(`/admin/invites/${code}`),

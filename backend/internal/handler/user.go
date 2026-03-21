@@ -259,6 +259,45 @@ func (h *UserHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// POST /admin/users/{id}/reset-password — superadmin only
+func (h *UserHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request) {
+	requesterClaims := auth.ClaimsFrom(r.Context())
+	requester, err := h.users.GetByID(r.Context(), requesterClaims.UserID)
+	if err != nil || requester == nil || requester.Username != "admin" {
+		jsonErr(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := decode(r, &body); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if len(body.Password) < 8 {
+		jsonErr(w, http.StatusUnprocessableEntity, "password must be at least 8 characters")
+		return
+	}
+
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := h.users.UpdatePassword(r.Context(), id, hash); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // readMemInfo parses /proc/meminfo and returns MemTotal, MemAvailable in kB.
 // Returns zeros silently if the file is unavailable (non-Linux hosts).
 func readMemInfo() (totalKB, availableKB int64) {

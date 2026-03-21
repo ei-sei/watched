@@ -4,7 +4,7 @@ import { adminApi, type AdminStats, type AdminUser, type AdminUserStats, type Se
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
-import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp, KeyRound } from 'lucide-react'
 
 type Tab = 'invites' | 'users' | 'flags'
 
@@ -85,6 +85,41 @@ function ConfirmDeleteModal({ username, onConfirm, onCancel }: {
             className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-md transition-colors"
           >
             Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordModal({ username, onConfirm, onCancel, isPending }: {
+  username: string
+  onConfirm: (password: string) => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  const [password, setPassword] = useState('')
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+      <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
+        <h2 className="text-white font-semibold">Reset password</h2>
+        <p className="text-zinc-400 text-sm">Set a new password for <span className="text-white font-medium">{username}</span>.</p>
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          placeholder="New password (min 8 chars)"
+          className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm"
+          autoFocus
+        />
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancel</button>
+          <button
+            onClick={() => onConfirm(password)}
+            disabled={password.length < 8 || isPending}
+            className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-md transition-colors"
+          >
+            {isPending ? 'Saving…' : 'Reset password'}
           </button>
         </div>
       </div>
@@ -269,11 +304,12 @@ function UserLibraryPanel({ items }: { items: import('@/types/media').MediaItem[
   )
 }
 
-function UserRow({ u, isSuperAdmin, updateFlags, onDelete }: {
+function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword }: {
   u: AdminUser
   isSuperAdmin: boolean
   updateFlags: (args: { id: number; flags: { is_admin?: boolean; is_premium?: boolean } }) => void
   onDelete: (u: AdminUser) => void
+  onResetPassword: (u: AdminUser) => void
 }) {
   const [open, setOpen] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
@@ -337,6 +373,15 @@ function UserRow({ u, isSuperAdmin, updateFlags, onDelete }: {
             Premium
           </label>
 
+          {isSuperAdmin && (
+            <button
+              onClick={() => onResetPassword(u)}
+              className="p-1.5 text-zinc-600 hover:text-indigo-400 transition-colors rounded"
+              title="Reset password"
+            >
+              <KeyRound size={14} />
+            </button>
+          )}
           {isSuperAdmin && u.username !== 'admin' && (
             <button
               onClick={() => onDelete(u)}
@@ -385,6 +430,7 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>('invites')
   const [newCode, setNewCode] = useState(randomCode)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; username: string } | null>(null)
+  const [resetTarget, setResetTarget] = useState<AdminUser | null>(null)
   const { show } = useToast()
   const { user: currentUser } = useAuth()
   const isSuperAdmin = currentUser?.username === 'admin'
@@ -420,6 +466,13 @@ export default function Admin() {
       adminApi.updateFlags(id, flags),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
     onError: () => show('Failed to update user', 'error'),
+  })
+
+  const resetPassword = useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) =>
+      adminApi.resetPassword(id, password),
+    onSuccess: () => { show('Password reset successfully', 'success'); setResetTarget(null) },
+    onError: () => show('Failed to reset password', 'error'),
   })
 
   const setFlag = useMutation({
@@ -550,6 +603,7 @@ export default function Admin() {
               isSuperAdmin={isSuperAdmin}
               updateFlags={(args) => updateFlags.mutate(args)}
               onDelete={(u) => setDeleteTarget({ id: u.id, username: u.username })}
+              onResetPassword={setResetTarget}
             />
           ))}
         </div>
@@ -567,6 +621,15 @@ export default function Admin() {
             />
           )}
         </div>
+      )}
+
+      {resetTarget && (
+        <ResetPasswordModal
+          username={resetTarget.username}
+          isPending={resetPassword.isPending}
+          onConfirm={(password) => resetPassword.mutate({ id: resetTarget.id, password })}
+          onCancel={() => setResetTarget(null)}
+        />
       )}
 
       {deleteTarget && (
