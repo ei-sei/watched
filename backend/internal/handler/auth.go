@@ -87,7 +87,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Lockout check
 	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
-		jsonErr(w, http.StatusTooManyRequests, "account locked, try later")
+		jsonErr(w, http.StatusTooManyRequests, "account locked — contact an admin to unlock it")
 		return
 	}
 

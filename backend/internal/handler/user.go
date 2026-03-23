@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ei-sei/brsti/internal/auth"
 	"github.com/ei-sei/brsti/internal/config"
@@ -177,7 +178,36 @@ func (h *UserHandler) AdminList(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	jsonOK(w, users)
+	type adminUser struct {
+		models.User
+		IsLocked bool `json:"is_locked"`
+	}
+	out := make([]adminUser, len(users))
+	now := time.Now()
+	for i, u := range users {
+		out[i] = adminUser{User: u, IsLocked: u.LockedUntil != nil && u.LockedUntil.After(now)}
+	}
+	jsonOK(w, out)
+}
+
+// POST /admin/users/{id}/unlock — superadmin only
+func (h *UserHandler) AdminUnlockUser(w http.ResponseWriter, r *http.Request) {
+	requesterClaims := auth.ClaimsFrom(r.Context())
+	requester, err := h.users.GetByID(r.Context(), requesterClaims.UserID)
+	if err != nil || requester == nil || requester.Username != "admin" {
+		jsonErr(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.users.UpdateLoginFail(r.Context(), id, 0, nil); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // PATCH /admin/users/{id}/flags

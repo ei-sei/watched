@@ -16,8 +16,13 @@ export default function Login() {
     try {
       await login(form.username, form.password)
       navigate('/')
-    } catch {
-      setError('Invalid username or password')
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 429) {
+        setError('Your account is locked — contact an admin to unlock it.')
+      } else {
+        setError('Invalid username or password')
+      }
     } finally {
       setLoading(false)
     }

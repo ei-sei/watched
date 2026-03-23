@@ -202,6 +202,7 @@ func main() {
 			r.Patch("/admin/users/{id}/flags", userH.AdminUpdateFlags)
 			r.Delete("/admin/users/{id}", userH.AdminDeleteUser)
 			r.Post("/admin/users/{id}/reset-password", userH.AdminResetPassword)
+			r.Post("/admin/users/{id}/unlock", userH.AdminUnlockUser)
 			r.Get("/admin/stats", userH.AdminStats)
 			r.Get("/admin/health", healthH.ExternalServices)
 			r.Get("/admin/invites", userH.AdminListInvites)

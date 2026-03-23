@@ -13,6 +13,7 @@ export interface AdminUser {
   is_admin: boolean
   is_premium: boolean
   is_public: boolean
+  is_locked: boolean
   created_at: string
 }
 
@@ -71,6 +72,7 @@ export const adminApi = {
   deleteUser: (id: number) => client.delete(`/admin/users/${id}`),
   resetPassword: (id: number, password: string) =>
     client.post(`/admin/users/${id}/reset-password`, { password }),
+  unlockUser: (id: number) => client.post(`/admin/users/${id}/unlock`, {}),
   listInvites: () => client.get<InviteCode[]>('/admin/invites'),
   createInvite: (code: string) => client.post<{ code: string }>('/admin/invites', { code }),
   deleteInvite: (code: string) => client.delete(`/admin/invites/${code}`),

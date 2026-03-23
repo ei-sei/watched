@@ -4,7 +4,7 @@ import { adminApi, type AdminStats, type AdminUser, type AdminUserStats, type Se
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
-import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp, KeyRound } from 'lucide-react'
+import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp, KeyRound, LockOpen, Lock } from 'lucide-react'
 
 type Tab = 'invites' | 'users' | 'flags'
 
@@ -304,12 +304,13 @@ function UserLibraryPanel({ items }: { items: import('@/types/media').MediaItem[
   )
 }
 
-function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword }: {
+function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword, onUnlock }: {
   u: AdminUser
   isSuperAdmin: boolean
   updateFlags: (args: { id: number; flags: { is_admin?: boolean; is_premium?: boolean } }) => void
   onDelete: (u: AdminUser) => void
   onResetPassword: (u: AdminUser) => void
+  onUnlock: (u: AdminUser) => void
 }) {
   const [open, setOpen] = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
@@ -336,7 +337,10 @@ function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword }: {
           className="flex-1 min-w-0 text-left flex items-center gap-2 group"
         >
           <div className="min-w-0">
-            <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
+              {u.is_locked && <Lock size={11} className="text-red-400" />}
+            </div>
             {u.display_name && u.display_name !== u.username && (
               <p className="text-xs text-zinc-600">{u.display_name}</p>
             )}
@@ -373,6 +377,15 @@ function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword }: {
             Premium
           </label>
 
+          {isSuperAdmin && u.is_locked && (
+            <button
+              onClick={() => onUnlock(u)}
+              className="p-1.5 text-red-400 hover:text-emerald-400 transition-colors rounded"
+              title="Unlock account"
+            >
+              <LockOpen size={14} />
+            </button>
+          )}
           {isSuperAdmin && (
             <button
               onClick={() => onResetPassword(u)}
@@ -466,6 +479,12 @@ export default function Admin() {
       adminApi.updateFlags(id, flags),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'users'] }),
     onError: () => show('Failed to update user', 'error'),
+  })
+
+  const unlockUser = useMutation({
+    mutationFn: (id: number) => adminApi.unlockUser(id),
+    onSuccess: () => { show('Account unlocked', 'success'); qc.invalidateQueries({ queryKey: ['admin', 'users'] }) },
+    onError: () => show('Failed to unlock account', 'error'),
   })
 
   const resetPassword = useMutation({
@@ -604,6 +623,7 @@ export default function Admin() {
               updateFlags={(args) => updateFlags.mutate(args)}
               onDelete={(u) => setDeleteTarget({ id: u.id, username: u.username })}
               onResetPassword={setResetTarget}
+              onUnlock={(u) => unlockUser.mutate(u.id)}
             />
           ))}
         </div>
