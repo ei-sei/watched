@@ -295,6 +295,11 @@ func (h *UserHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	// Clear any lockout so the user can log in immediately
+	if err := h.users.UpdateLoginFail(r.Context(), id, 0, nil); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
