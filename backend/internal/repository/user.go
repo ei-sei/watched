@@ -38,7 +38,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 
 func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	return scanUser(r.db.QueryRow(ctx,
-		`SELECT `+userColumns+` FROM users WHERE username = $1`, username))
+		`SELECT `+userColumns+` FROM users WHERE LOWER(username) = LOWER($1)`, username))
 }
 
 func (r *UserRepo) Create(ctx context.Context, username, passwordHash string) (*models.User, error) {
