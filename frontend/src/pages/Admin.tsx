@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi, type AdminStats, type AdminUser, type AdminUserStats, type ServiceStatus, type FeatureFlag } from '@/api/admin'
+import { adminApi, type AdminStats, type AdminUser, type ServiceStatus, type FeatureFlag } from '@/api/admin'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
-import { Copy, RefreshCw, Trash2, ChevronDown, ChevronUp, KeyRound, LockOpen, Lock } from 'lucide-react'
+import { Copy, RefreshCw, Trash2, KeyRound, LockOpen, Lock } from 'lucide-react'
 
 type Tab = 'invites' | 'users' | 'flags'
 
@@ -244,65 +244,7 @@ function ServicesCard({ services, loading }: { services: ServiceStatus[] | undef
   )
 }
 
-function UserStatsPanel({ stats }: { stats: AdminUserStats }) {
-  const sections = [
-    { label: 'Films',    data: stats.films,    extra: null },
-    { label: 'TV',       data: stats.tv_shows, extra: stats.episodes_watched > 0 ? `${stats.episodes_watched} eps` : null },
-    { label: 'Anime',    data: stats.anime,    extra: null },
-    { label: 'Books',    data: stats.books,    extra: stats.chapters_read > 0 ? `${stats.chapters_read} ch` : null },
-  ]
-  const hasAny = sections.some(s => s.data.total > 0)
-  if (!hasAny) return <p className="text-xs text-zinc-600 py-1">No library items yet.</p>
-  return (
-    <div className="flex flex-wrap gap-2 pt-1">
-      {sections.filter(s => s.data.total > 0).map(s => (
-        <div key={s.label} className="flex flex-col items-center bg-white/[0.04] rounded-md px-3 py-2 min-w-[60px]">
-          <span className="text-sm font-semibold text-white tabular-nums">{s.data.total}</span>
-          <span className="text-[10px] text-zinc-500 leading-tight">{s.label}</span>
-          {s.data.completed > 0 && (
-            <span className="text-[10px] text-zinc-600 leading-tight">{s.data.completed} done</span>
-          )}
-          {s.extra && <span className="text-[10px] text-indigo-400 leading-tight">{s.extra}</span>}
-        </div>
-      ))}
-    </div>
-  )
-}
 
-const LIBRARY_LABELS: Record<string, string> = {
-  film: 'Films', tv_show: 'TV Shows', anime: 'Anime', book: 'Books',
-}
-const LIBRARY_ORDER = ['film', 'tv_show', 'anime', 'book']
-
-function UserLibraryPanel({ items }: { items: import('@/types/media').MediaItem[] }) {
-  const grouped = LIBRARY_ORDER.reduce<Record<string, import('@/types/media').MediaItem[]>>((acc, type) => {
-    const matching = items.filter(i => i.media_type === type)
-    if (matching.length) acc[type] = matching
-    return acc
-  }, {})
-
-  if (!items.length) return <p className="text-xs text-zinc-600 pt-1">Empty library.</p>
-
-  return (
-    <div className="space-y-3 pt-1">
-      {Object.entries(grouped).map(([type, list]) => (
-        <div key={type}>
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">
-            {LIBRARY_LABELS[type]} ({list.length})
-          </p>
-          <div className="space-y-0.5">
-            {list.map(item => (
-              <div key={item.id} className="flex items-center justify-between gap-2">
-                <p className="text-xs text-zinc-300 truncate">{item.title}{item.year ? ` (${item.year})` : ''}</p>
-                <span className="text-[10px] text-zinc-600 flex-shrink-0 capitalize">{item.status.replace('_', ' ')}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword, onUnlock }: {
   u: AdminUser
@@ -312,129 +254,59 @@ function UserRow({ u, isSuperAdmin, updateFlags, onDelete, onResetPassword, onUn
   onResetPassword: (u: AdminUser) => void
   onUnlock: (u: AdminUser) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const [showLibrary, setShowLibrary] = useState(false)
-
-  const stats = useQuery({
-    queryKey: ['admin', 'user-stats', u.id],
-    queryFn: () => adminApi.getUserStats(u.id).then(r => r.data),
-    enabled: open,
-    staleTime: 1000 * 60 * 5,
-  })
-
-  const library = useQuery({
-    queryKey: ['admin', 'user-library', u.id],
-    queryFn: () => adminApi.getUserLibrary(u.id).then(r => r.data),
-    enabled: isSuperAdmin && open && showLibrary,
-    staleTime: 1000 * 60 * 5,
-  })
-
   return (
-    <div className="bg-[#1a1a1a] rounded-lg ring-1 ring-white/[0.06] overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <button
-          onClick={() => setOpen(o => !o)}
-          className="flex-1 min-w-0 text-left flex items-center gap-2 group"
-        >
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
-              {u.is_locked && <Lock size={11} className="text-red-400" />}
-            </div>
-            {u.display_name && u.display_name !== u.username && (
-              <p className="text-xs text-zinc-600">{u.display_name}</p>
-            )}
-          </div>
-          <span className="text-zinc-600 group-hover:text-zinc-400 transition-colors ml-1 flex-shrink-0">
-            {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </span>
-        </button>
+    <div className="bg-[#1a1a1a] rounded-lg ring-1 ring-white/[0.06] flex items-center gap-3 px-4 py-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm text-zinc-200 font-medium">{u.username}</p>
+          {u.is_locked && <Lock size={11} className="text-red-400" />}
+        </div>
+        <p className="text-xs text-zinc-600">{formatDate(u.created_at)}</p>
+      </div>
 
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {isSuperAdmin ? (
-            <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
-              <input
-                type="checkbox"
-                checked={u.is_admin}
-                disabled={u.username === 'admin'}
-                onChange={(e) => updateFlags({ id: u.id, flags: { is_admin: e.target.checked } })}
-                className="rounded"
-              />
-              Admin
-            </label>
-          ) : (
-            u.is_admin && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Admin</span>
-          )}
-
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {isSuperAdmin ? (
           <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
             <input
               type="checkbox"
-              checked={u.is_premium}
+              checked={u.is_admin}
               disabled={u.username === 'admin'}
-              onChange={(e) => updateFlags({ id: u.id, flags: { is_premium: e.target.checked } })}
+              onChange={(e) => updateFlags({ id: u.id, flags: { is_admin: e.target.checked } })}
               className="rounded"
             />
-            Premium
+            Admin
           </label>
+        ) : (
+          u.is_admin && <span className="text-xs px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-400">Admin</span>
+        )}
 
-          {isSuperAdmin && u.is_locked && (
-            <button
-              onClick={() => onUnlock(u)}
-              className="p-1.5 text-red-400 hover:text-emerald-400 transition-colors rounded"
-              title="Unlock account"
-            >
-              <LockOpen size={14} />
-            </button>
-          )}
-          {isSuperAdmin && (
-            <button
-              onClick={() => onResetPassword(u)}
-              className="p-1.5 text-zinc-600 hover:text-indigo-400 transition-colors rounded"
-              title="Reset password"
-            >
-              <KeyRound size={14} />
-            </button>
-          )}
-          {isSuperAdmin && u.username !== 'admin' && (
-            <button
-              onClick={() => onDelete(u)}
-              className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded"
-              title="Delete user"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
+        <label className={`flex items-center gap-1.5 text-xs select-none ${u.username === 'admin' ? 'text-zinc-600 cursor-not-allowed' : 'text-zinc-500 cursor-pointer'}`}>
+          <input
+            type="checkbox"
+            checked={u.is_premium}
+            disabled={u.username === 'admin'}
+            onChange={(e) => updateFlags({ id: u.id, flags: { is_premium: e.target.checked } })}
+            className="rounded"
+          />
+          Premium
+        </label>
+
+        {isSuperAdmin && u.is_locked && (
+          <button onClick={() => onUnlock(u)} className="p-1.5 text-red-400 hover:text-emerald-400 transition-colors rounded" title="Unlock account">
+            <LockOpen size={14} />
+          </button>
+        )}
+        {isSuperAdmin && (
+          <button onClick={() => onResetPassword(u)} className="p-1.5 text-zinc-600 hover:text-indigo-400 transition-colors rounded" title="Reset password">
+            <KeyRound size={14} />
+          </button>
+        )}
+        {isSuperAdmin && u.username !== 'admin' && (
+          <button onClick={() => onDelete(u)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors rounded" title="Delete user">
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
-
-      {open && (
-        <div className="px-4 pb-3 border-t border-white/[0.04]">
-          <p className="text-[10px] text-zinc-600 mt-2 mb-2">
-            Joined {formatDate(u.created_at)}
-          </p>
-          {stats.isLoading && <p className="text-xs text-zinc-600">Loading…</p>}
-          {stats.isError && <p className="text-xs text-red-400">Failed to load stats</p>}
-          {stats.data && <UserStatsPanel stats={stats.data} />}
-
-          {isSuperAdmin && (
-            <div className="mt-3 border-t border-white/[0.04] pt-3">
-              <button
-                onClick={() => setShowLibrary(v => !v)}
-                className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-wider"
-              >
-                {showLibrary ? 'Hide library' : 'View library'}
-              </button>
-              {showLibrary && (
-                <>
-                  {library.isLoading && <p className="text-xs text-zinc-600 mt-2">Loading…</p>}
-                  {library.isError && <p className="text-xs text-red-400 mt-2">Failed to load library</p>}
-                  {library.data && <UserLibraryPanel items={library.data} />}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
