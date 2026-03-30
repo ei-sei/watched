@@ -28,11 +28,12 @@ let isRefreshing = false
 let refreshQueue: Array<(token: string) => void> = []
 
 async function doRefresh(): Promise<string> {
+  // Always send the refresh token via header as a fallback in case the
+  // HttpOnly cookie was cleared by the browser (common on Android when
+  // the app is backgrounded for a long time).
   const headers: Record<string, string> = {}
-  if (isPWAStandalone()) {
-    const pwaToken = localStorage.getItem(PWA_REFRESH_KEY)
-    if (pwaToken) headers['X-Refresh-Token'] = pwaToken
-  }
+  const storedToken = localStorage.getItem(PWA_REFRESH_KEY)
+  if (storedToken) headers['X-Refresh-Token'] = storedToken
   const { data } = await client.post<{ access_token: string }>('/auth/refresh', undefined, { headers })
   await storage.set('access_token', data.access_token)
   return data.access_token
