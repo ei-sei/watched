@@ -358,12 +358,23 @@ export default function Settings() {
 
   const changePassword = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (pw.next.length < 8) {
+      show('New password must be at least 8 characters', 'error')
+      return
+    }
     try {
       await authApi.changePassword({ current_password: pw.current, new_password: pw.next })
       show('Password changed', 'success')
       setPw({ current: '', next: '' })
-    } catch {
-      show('Incorrect current password', 'error')
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 401) {
+        show('Current password is incorrect', 'error')
+      } else if (status === 422) {
+        show('New password must be at least 8 characters', 'error')
+      } else {
+        show('Failed to change password', 'error')
+      }
     }
   }
 
