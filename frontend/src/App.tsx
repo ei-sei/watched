@@ -74,23 +74,13 @@ function AuthProvider({ children }: { children: ReactNode }) {
       if (!initialised.current) syncMedia().catch(console.error)
     } catch (err: any) {
       const status = err?.response?.status
+      // Only clear the session on definitive auth failures. The interceptor
+      // handles token refresh automatically (including the localStorage fallback).
+      // Network errors / server blips keep the cached user intact.
       if (status === 401 || status === 403) {
-        // Before giving up, explicitly attempt a refresh in case the access
-        // token was missing from storage (the interceptor only retries when
-        // an Authorization header was present on the original request).
-        try {
-          await authApi.refresh()
-          const { data: me } = await authApi.me()
-          setUser(me)
-          setCachedUser(me)
-          if (!initialised.current) syncMedia().catch(console.error)
-        } catch {
-          // Refresh also failed — session is genuinely gone
-          setUser(null)
-          setCachedUser(null)
-        }
+        setUser(null)
+        setCachedUser(null)
       }
-      // Network errors / server blips: keep the cached user intact
     } finally {
       initialised.current = true
       setIsLoading(false)

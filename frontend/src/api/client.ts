@@ -78,17 +78,22 @@ client.interceptors.response.use(
     const original = error.config
 
     // If the refresh endpoint itself returns 401, the session is gone.
-    // Don't attempt another refresh — just clear the token and redirect.
+    // Clear both tokens and redirect — also clear the localStorage fallback
+    // so we don't enter an infinite loop on the next page load.
     if (original.url?.includes('/auth/refresh') && error.response?.status === 401) {
       refreshQueue.forEach((cb) => cb(''))
       refreshQueue = []
       isRefreshing = false
       await storage.remove('access_token')
+      localStorage.removeItem(PWA_REFRESH_KEY)
       window.location.replace('/login')
       return Promise.reject(error)
     }
 
-    if (error.response?.status === 401 && !original._retry && original.headers?.Authorization) {
+    // Retry on 401 if we have an Authorization header OR a stored refresh token
+    // (handles the case where the access token was missing from storage entirely).
+    const hasRefreshToken = !!localStorage.getItem(PWA_REFRESH_KEY)
+    if (error.response?.status === 401 && !original._retry && (original.headers?.Authorization || hasRefreshToken)) {
       original._retry = true
       if (isRefreshing) {
         return new Promise((resolve) => {
@@ -111,6 +116,7 @@ client.interceptors.response.use(
         if (status === 401 || status === 403) {
           refreshQueue = []
           await storage.remove('access_token')
+          localStorage.removeItem(PWA_REFRESH_KEY)
           window.location.replace('/login')
         } else {
           refreshQueue = []
