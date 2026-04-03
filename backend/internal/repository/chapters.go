@@ -142,6 +142,32 @@ func (r *ChapterRepo) Delete(ctx context.Context, id, mediaItemID int) error {
 	return nil
 }
 
+func (r *ChapterRepo) BulkUpsert(ctx context.Context, mediaItemID int, inputs []UpsertChapterInput) (int, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	count := 0
+	for _, in := range inputs {
+		tag, err := tx.Exec(ctx,
+			`INSERT INTO book_chapter_logs
+			     (media_item_id, chapter_number, chapter_title, start_page, end_page, status, note, started_at, completed_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			 ON CONFLICT (media_item_id, chapter_number) DO NOTHING`,
+			mediaItemID, in.ChapterNumber, in.ChapterTitle, in.StartPage, in.EndPage,
+			in.Status, in.Note, in.StartedAt, in.CompletedAt,
+		)
+		if err != nil {
+			return count, err
+		}
+		count += int(tag.RowsAffected())
+	}
+
+	return count, tx.Commit(ctx)
+}
+
 func (r *ChapterRepo) CountByStatus(ctx context.Context, mediaItemID int) (map[models.ChapterStatus]int, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT status, COUNT(*) FROM book_chapter_logs WHERE media_item_id = $1 GROUP BY status`,
