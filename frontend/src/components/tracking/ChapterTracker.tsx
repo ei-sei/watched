@@ -36,21 +36,30 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(ch.note ?? '')
+  const [titleDraft, setTitleDraft] = useState(ch.chapter_title ?? '')
+  const [editingTitle, setEditingTitle] = useState(!ch.chapter_title)
+
+  const upsert = (fields: Partial<{ note: string; chapter_title: string }>) =>
+    chaptersApi.upsert(mediaId, {
+      chapter_number: ch.chapter_number,
+      chapter_title: fields.chapter_title ?? ch.chapter_title ?? undefined,
+      start_page: ch.start_page ?? undefined,
+      end_page: ch.end_page ?? undefined,
+      status: ch.status,
+      note: fields.note ?? ch.note ?? undefined,
+    })
 
   const saveNote = useMutation({
-    mutationFn: (note: string) =>
-      chaptersApi.upsert(mediaId, {
-        chapter_number: ch.chapter_number,
-        chapter_title: ch.chapter_title ?? undefined,
-        start_page: ch.start_page ?? undefined,
-        end_page: ch.end_page ?? undefined,
-        status: ch.status,
-        note,
-      }),
+    mutationFn: (note: string) => upsert({ note }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['chapters', mediaId] })
       setEditing(false)
     },
+  })
+
+  const saveTitle = useMutation({
+    mutationFn: (title: string) => upsert({ chapter_title: title }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['chapters', mediaId] }),
   })
 
   const pageRange = ch.start_page && ch.end_page
@@ -67,9 +76,9 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
         className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors"
       >
         <DotIndicator hasNote={!!ch.note} />
-        <span className="text-xs text-zinc-500 w-8 flex-shrink-0">#{ch.chapter_number}</span>
+        <span className="text-xs text-zinc-500 flex-shrink-0">Ch. {ch.chapter_number}</span>
         <span className="flex-1 text-sm text-zinc-200 truncate">
-          {ch.chapter_title ?? `Chapter ${ch.chapter_number}`}
+          {ch.chapter_title ?? ''}
         </span>
         {pageRange && (
           <span className="text-xs text-zinc-600 flex-shrink-0">{pageRange}</span>
@@ -80,6 +89,35 @@ function ChapterRow({ ch, mediaId }: ChapterRowProps) {
       {/* Expanded state */}
       {open && (
         <div className="px-3 pb-3 border-t border-white/[0.04]">
+          <div className="pt-3 space-y-3">
+            {editingTitle ? (
+              <input
+                type="text"
+                value={titleDraft}
+                autoFocus
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => {
+                  if (titleDraft !== (ch.chapter_title ?? '')) saveTitle.mutate(titleDraft)
+                  if (titleDraft) setEditingTitle(false)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
+                placeholder="Chapter title"
+                className="w-full bg-[#111] text-zinc-200 text-sm rounded-md px-3 py-1.5 border border-white/[0.08] focus:outline-none focus:border-white/20 placeholder:text-zinc-600"
+              />
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm text-zinc-500 truncate">{ch.chapter_title}</span>
+                <button
+                  onClick={() => setEditingTitle(true)}
+                  className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0"
+                >
+                  Edit
+                </button>
+              </div>
+            )}
+          </div>
           <div className="pt-3">
             {!editing && ch.note ? (
               <div className="space-y-2">
