@@ -220,7 +220,7 @@ export default function Search() {
   const setQuery = (q: string) => { setQueryState(q); sessionStorage.setItem('search_q', q) }
   const setTab = (t: Tab) => { setTabState(t); sessionStorage.setItem('search_tab', t) }
 
-  const { data, isFetching } = useSearch(query, tab)
+  const { data, suggestion, isFetching } = useSearch(query, tab)
   const create = useCreateMedia()
   const { show } = useToast()
   const navigate = useNavigate()
@@ -459,6 +459,19 @@ export default function Search() {
       </div>
 
       {isFetching && <LoadingSpinner />}
+
+      {!isFetching && suggestion && (
+        <p className="text-sm text-zinc-500">
+          Did you mean{' '}
+          <button
+            onClick={() => { setQuery(suggestion); setFocusedIndex(null) }}
+            className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors"
+          >
+            {suggestion}
+          </button>
+          ?
+        </p>
+      )}
 
       {!isFetching && (
         <div className="space-y-6">

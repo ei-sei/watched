@@ -12,10 +12,16 @@ export function useSearch(query: string, type: Tab = 'multi') {
     return () => clearTimeout(timer)
   }, [query])
 
-  return useQuery({
+  const result = useQuery({
     queryKey: ['search', type, debouncedQuery],
     queryFn: () =>
       searchApi.search(debouncedQuery, type === 'multi' ? undefined : type).then((r) => r.data),
     enabled: debouncedQuery.length >= 2,
   })
+
+  return {
+    data: result.data?.items,
+    suggestion: result.data?.suggestion ?? '',
+    isFetching: result.isFetching,
+  }
 }

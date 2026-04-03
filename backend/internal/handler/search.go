@@ -124,7 +124,15 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rankResults(all, q)
-	jsonOK(w, all)
+
+	type searchResponse struct {
+		Items      []models.SearchResult `json:"items"`
+		Suggestion string                `json:"suggestion"`
+	}
+	jsonOK(w, searchResponse{
+		Items:      all,
+		Suggestion: computeSuggestion(q, all),
+	})
 }
 
 func (h *SearchHandler) searchTMDB(ctx context.Context, q string) ([]models.SearchResult, error) {
@@ -620,6 +628,82 @@ func bookKey(r models.SearchResult) string {
 		}
 	}
 	return title + "|" + author
+}
+
+// computeSuggestion returns the top result's title when it looks like a
+// spelling correction of the query (word-level Levenshtein ≤ 2), and an empty
+// string otherwise.
+func computeSuggestion(q string, results []models.SearchResult) string {
+	if len(results) == 0 || len(q) < 4 {
+		return ""
+	}
+	top := results[0]
+	qNorm := normTitle(q)
+	rNorm := normTitle(top.Title)
+	if qNorm == rNorm {
+		return ""
+	}
+
+	qWords := strings.Fields(qNorm)
+	rWords := strings.Fields(rNorm)
+
+	totalDist, corrected := 0, 0
+	for _, qw := range qWords {
+		best := len(qw) + 1
+		for _, rw := range rWords {
+			if d := levenshtein(qw, rw); d < best {
+				best = d
+			}
+		}
+		totalDist += best
+		if best > 0 {
+			corrected++
+		}
+	}
+
+	// At least one word must differ, and total edit cost must be small.
+	if corrected == 0 || totalDist > 2 {
+		return ""
+	}
+	return top.Title
+}
+
+// levenshtein returns the edit distance between two strings.
+func levenshtein(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			if ra[i-1] == rb[j-1] {
+				curr[j] = prev[j-1]
+			} else {
+				sub := prev[j-1] + 1
+				del := prev[j] + 1
+				ins := curr[j-1] + 1
+				curr[j] = sub
+				if del < curr[j] {
+					curr[j] = del
+				}
+				if ins < curr[j] {
+					curr[j] = ins
+				}
+			}
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
 }
 
 // normTitle lowercases and strips common punctuation for loose title matching.

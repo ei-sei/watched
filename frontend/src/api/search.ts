@@ -1,7 +1,7 @@
 import client from './client'
-import type { SearchResult } from '@/types/media'
+import type { SearchResponse } from '@/types/media'
 
 export const searchApi = {
   search: (q: string, type?: string) =>
-    client.get<SearchResult[]>('/search', { params: { q, ...(type ? { type } : {}) } }),
+    client.get<SearchResponse>('/search', { params: { q, ...(type ? { type } : {}) } }),
 }
