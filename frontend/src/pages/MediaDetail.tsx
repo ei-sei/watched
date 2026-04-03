@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useMediaItem, useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
 import EpisodeTracker from '@/components/tracking/EpisodeTracker'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
+import ProgressTracker from '@/components/tracking/ProgressTracker'
 import StatusBadge from '@/components/ui/StatusBadge'
 import RatingDisplay from '@/components/ui/RatingDisplay'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -72,6 +73,9 @@ export default function MediaDetail() {
         </div>
       </div>
 
+      {(item.media_type === 'book' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
+        <ProgressTracker item={item} />
+      )}
       {item.media_type === 'tv_show' && <EpisodeTracker mediaId={item.id} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
     </div>

@@ -16,14 +16,15 @@ type MediaRepo struct{ db *pgxpool.Pool }
 func NewMediaRepo(db *pgxpool.Pool) *MediaRepo { return &MediaRepo{db: db} }
 
 const mediaColumns = `id, user_id, media_type, external_id, title, year, poster_url,
-	metadata, status, rating, review_text, started_at, completed_at, created_at, updated_at`
+	metadata, status, rating, review_text, started_at, completed_at,
+	current_progress, total_progress, created_at, updated_at`
 
 func scanMedia(row pgx.Row) (*models.MediaItem, error) {
 	m := &models.MediaItem{}
 	err := row.Scan(
 		&m.ID, &m.UserID, &m.MediaType, &m.ExternalID, &m.Title, &m.Year, &m.PosterURL,
 		&m.Metadata, &m.Status, &m.Rating, &m.ReviewText, &m.StartedAt, &m.CompletedAt,
-		&m.CreatedAt, &m.UpdatedAt,
+		&m.CurrentProgress, &m.TotalProgress, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -126,7 +127,7 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 		if err := rows.Scan(
 			&m.ID, &m.UserID, &m.MediaType, &m.ExternalID, &m.Title, &m.Year, &m.PosterURL,
 			&m.Metadata, &m.Status, &m.Rating, &m.ReviewText, &m.StartedAt, &m.CompletedAt,
-			&m.CreatedAt, &m.UpdatedAt,
+			&m.CurrentProgress, &m.TotalProgress, &m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -163,14 +164,16 @@ func (r *MediaRepo) GetByExternalID(ctx context.Context, userID int, externalID 
 }
 
 type CreateMediaInput struct {
-	UserID     int
-	MediaType  models.MediaType
-	ExternalID *string
-	Title      string
-	Year       *int
-	PosterURL  *string
-	Metadata   map[string]any
-	Status     models.MediaStatus
+	UserID          int
+	MediaType       models.MediaType
+	ExternalID      *string
+	Title           string
+	Year            *int
+	PosterURL       *string
+	Metadata        map[string]any
+	Status          models.MediaStatus
+	CurrentProgress *int
+	TotalProgress   *int
 }
 
 func (r *MediaRepo) Create(ctx context.Context, in CreateMediaInput) (*models.MediaItem, error) {
@@ -178,19 +181,22 @@ func (r *MediaRepo) Create(ctx context.Context, in CreateMediaInput) (*models.Me
 		in.Metadata = map[string]any{}
 	}
 	return scanMedia(r.db.QueryRow(ctx,
-		`INSERT INTO media_items (user_id, media_type, external_id, title, year, poster_url, metadata, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO media_items (user_id, media_type, external_id, title, year, poster_url, metadata, status, current_progress, total_progress)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING `+mediaColumns,
 		in.UserID, in.MediaType, in.ExternalID, in.Title, in.Year, in.PosterURL, in.Metadata, in.Status,
+		in.CurrentProgress, in.TotalProgress,
 	))
 }
 
 type UpdateMediaInput struct {
-	Status      *models.MediaStatus
-	Rating      *float64
-	ReviewText  *string
-	StartedAt   *string // DATE string yyyy-mm-dd or nil to clear
-	CompletedAt *string
+	Status          *models.MediaStatus
+	Rating          *float64
+	ReviewText      *string
+	StartedAt       *string // DATE string yyyy-mm-dd or nil to clear
+	CompletedAt     *string
+	CurrentProgress *int
+	TotalProgress   *int
 }
 
 func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaInput) (*models.MediaItem, error) {
@@ -216,6 +222,14 @@ func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaIn
 	if in.CompletedAt != nil {
 		args = append(args, *in.CompletedAt)
 		sets = append(sets, fmt.Sprintf("completed_at = $%d", len(args)))
+	}
+	if in.CurrentProgress != nil {
+		args = append(args, *in.CurrentProgress)
+		sets = append(sets, fmt.Sprintf("current_progress = $%d", len(args)))
+	}
+	if in.TotalProgress != nil {
+		args = append(args, *in.TotalProgress)
+		sets = append(sets, fmt.Sprintf("total_progress = $%d", len(args)))
 	}
 
 	query := fmt.Sprintf(

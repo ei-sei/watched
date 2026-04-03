@@ -130,11 +130,13 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Status      *models.MediaStatus `json:"status"`
-		Rating      *float64            `json:"rating"`
-		ReviewText  *string             `json:"review_text"`
-		StartedAt   *string             `json:"started_at"`
-		CompletedAt *string             `json:"completed_at"`
+		Status          *models.MediaStatus `json:"status"`
+		Rating          *float64            `json:"rating"`
+		ReviewText      *string             `json:"review_text"`
+		StartedAt       *string             `json:"started_at"`
+		CompletedAt     *string             `json:"completed_at"`
+		CurrentProgress *int                `json:"current_progress"`
+		TotalProgress   *int                `json:"total_progress"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
@@ -142,11 +144,13 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	item, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
-		Status:      body.Status,
-		Rating:      body.Rating,
-		ReviewText:  body.ReviewText,
-		StartedAt:   body.StartedAt,
-		CompletedAt: body.CompletedAt,
+		Status:          body.Status,
+		Rating:          body.Rating,
+		ReviewText:      body.ReviewText,
+		StartedAt:       body.StartedAt,
+		CompletedAt:     body.CompletedAt,
+		CurrentProgress: body.CurrentProgress,
+		TotalProgress:   body.TotalProgress,
 	})
 	if err != nil || item == nil {
 		jsonErr(w, http.StatusNotFound, "not found")
