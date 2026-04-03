@@ -118,7 +118,7 @@ func (h *UserHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.media.List(r.Context(), user.ID, repository.MediaFilter{PerPage: 1000})
+	result, err := h.media.List(r.Context(), user.ID, repository.MediaFilter{NoLimit: true})
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return

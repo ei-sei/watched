@@ -39,14 +39,17 @@ type MediaFilter struct {
 	Order     string // asc | desc
 	Page      int
 	PerPage   int
+	NoLimit   bool // bypass pagination, return all results
 }
 
 func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*models.PaginatedMedia, error) {
-	if f.Page < 1 {
-		f.Page = 1
-	}
-	if f.PerPage < 1 || f.PerPage > 100 {
-		f.PerPage = 20
+	if !f.NoLimit {
+		if f.Page < 1 {
+			f.Page = 1
+		}
+		if f.PerPage < 1 || f.PerPage > 100 {
+			f.PerPage = 20
+		}
 	}
 
 	args := []any{userID}
@@ -96,12 +99,20 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 		nullsClause = " NULLS LAST"
 	}
 
-	offset := (f.Page - 1) * f.PerPage
-	args = append(args, f.PerPage, offset)
-	query := fmt.Sprintf(
-		`SELECT %s FROM media_items WHERE %s ORDER BY %s %s%s LIMIT $%d OFFSET $%d`,
-		mediaColumns, whereClause, sortCol, sortDir, nullsClause, len(args)-1, len(args),
-	)
+	var query string
+	if f.NoLimit {
+		query = fmt.Sprintf(
+			`SELECT %s FROM media_items WHERE %s ORDER BY %s %s%s`,
+			mediaColumns, whereClause, sortCol, sortDir, nullsClause,
+		)
+	} else {
+		offset := (f.Page - 1) * f.PerPage
+		args = append(args, f.PerPage, offset)
+		query = fmt.Sprintf(
+			`SELECT %s FROM media_items WHERE %s ORDER BY %s %s%s LIMIT $%d OFFSET $%d`,
+			mediaColumns, whereClause, sortCol, sortDir, nullsClause, len(args)-1, len(args),
+		)
+	}
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -122,9 +133,12 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 		items = append(items, m)
 	}
 
-	pages := total / f.PerPage
-	if total%f.PerPage != 0 {
-		pages++
+	pages := 1
+	if !f.NoLimit && f.PerPage > 0 {
+		pages = total / f.PerPage
+		if total%f.PerPage != 0 {
+			pages++
+		}
 	}
 
 	return &models.PaginatedMedia{
