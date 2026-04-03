@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS invite_codes;
+DROP TABLE IF EXISTS media_cache;
+DROP TABLE IF EXISTS activity_logs;
+DROP TABLE IF EXISTS list_items;
+DROP TABLE IF EXISTS user_lists;
+DROP TABLE IF EXISTS book_chapter_logs;
+DROP TABLE IF EXISTS tv_episode_logs;
+DROP TABLE IF EXISTS media_items;
+DROP TABLE IF EXISTS users;
+DROP TYPE IF EXISTS action_type;
+DROP TYPE IF EXISTS chapter_status;
+DROP TYPE IF EXISTS media_status;
+DROP TYPE IF EXISTS media_type;
