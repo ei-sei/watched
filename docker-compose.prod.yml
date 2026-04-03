@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: brsti-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - brsti_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  api:
+    image: ${ECR_REGISTRY}/${ECR_REPO_API}:${IMAGE_TAG:-latest}
+    container_name: brsti-api
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
+      CORS_ORIGINS: https://brsti.uk,https://www.brsti.uk
+      ENVIRONMENT: production
+      PORT: "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - brsti_net
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  nginx:
+    image: ${ECR_REGISTRY}/${ECR_REPO_NGINX}:${IMAGE_TAG:-latest}
+    container_name: brsti-nginx
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - brsti_net
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  pg_data:
+    driver: local
+
+networks:
+  brsti_net:
+    driver: bridge
