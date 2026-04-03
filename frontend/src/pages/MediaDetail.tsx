@@ -74,7 +74,7 @@ export default function MediaDetail() {
       </div>
 
       {(item.media_type === 'book' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
-        <ProgressTracker item={item} />
+        <ProgressTracker key={`${item.id}-${item.current_progress}-${item.total_progress}`} item={item} />
       )}
       {item.media_type === 'tv_show' && <EpisodeTracker mediaId={item.id} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}

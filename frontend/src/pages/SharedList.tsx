@@ -5,7 +5,6 @@ import type { UserList } from '@/types/media'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { Copy, Check } from 'lucide-react'
 
-const ROUTE: Record<string, string> = { film: 'films', tv_show: 'tv', book: 'books', anime: 'anime' }
 
 export default function SharedList() {
   const { id } = useParams<{ id: string }>()

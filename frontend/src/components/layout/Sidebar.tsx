@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
-export const PRIMARY_NAV = [
+const PRIMARY_NAV = [
   { to: '/films',  label: 'Movies',   icon: Film },
   { to: '/tv',     label: 'TV Shows', icon: Tv },
   { to: '/books',  label: 'Books',    icon: BookOpen },
