@@ -35,6 +35,8 @@ type MediaFilter struct {
 	MediaType *models.MediaType
 	Status    *models.MediaStatus
 	Search    *string
+	Sort      string // created_at | updated_at | rating | title | year
+	Order     string // asc | desc
 	Page      int
 	PerPage   int
 }
@@ -72,11 +74,33 @@ func (r *MediaRepo) List(ctx context.Context, userID int, f MediaFilter) (*model
 		return nil, err
 	}
 
+	// Whitelist sort columns to prevent SQL injection
+	allowedSort := map[string]string{
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+		"rating":     "rating",
+		"title":      "title",
+		"year":       "year",
+	}
+	sortCol, ok := allowedSort[f.Sort]
+	if !ok {
+		sortCol = "created_at"
+	}
+	sortDir := "DESC"
+	if f.Order == "asc" {
+		sortDir = "ASC"
+	}
+	// NULLs last for rating/year
+	nullsClause := ""
+	if sortCol == "rating" || sortCol == "year" {
+		nullsClause = " NULLS LAST"
+	}
+
 	offset := (f.Page - 1) * f.PerPage
 	args = append(args, f.PerPage, offset)
 	query := fmt.Sprintf(
-		`SELECT %s FROM media_items WHERE %s ORDER BY updated_at DESC LIMIT $%d OFFSET $%d`,
-		mediaColumns, whereClause, len(args)-1, len(args),
+		`SELECT %s FROM media_items WHERE %s ORDER BY %s %s%s LIMIT $%d OFFSET $%d`,
+		mediaColumns, whereClause, sortCol, sortDir, nullsClause, len(args)-1, len(args),
 	)
 
 	rows, err := r.db.Query(ctx, query, args...)
