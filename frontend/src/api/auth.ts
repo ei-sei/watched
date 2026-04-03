@@ -7,6 +7,6 @@ export const authApi = {
   refresh: () => client.post<TokenResponse>('/auth/refresh'),
   logout: () => client.post('/auth/logout'),
   me: () => client.get<User>('/users/me'),
-  updateMe: (data: { display_name?: string; avatar_url?: string }) => client.patch<User>('/users/me', data),
+  updateMe: (data: { display_name?: string; avatar_url?: string; is_public?: boolean }) => client.patch<User>('/users/me', data),
   changePassword: (data: { current_password: string; new_password: string }) => client.put('/users/me/password', data),
 }

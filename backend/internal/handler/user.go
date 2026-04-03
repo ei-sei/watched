@@ -13,12 +13,13 @@ import (
 
 type UserHandler struct {
 	users    *repository.UserRepo
+	media    *repository.MediaRepo
 	cfg      *config.Config
 	validate *validator.Validate
 }
 
-func NewUserHandler(users *repository.UserRepo, cfg *config.Config) *UserHandler {
-	return &UserHandler{users: users, cfg: cfg, validate: validator.New()}
+func NewUserHandler(users *repository.UserRepo, media *repository.MediaRepo, cfg *config.Config) *UserHandler {
+	return &UserHandler{users: users, media: media, cfg: cfg, validate: validator.New()}
 }
 
 // GET /users/me
@@ -37,6 +38,7 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DisplayName *string `json:"display_name"`
 		AvatarURL   *string `json:"avatar_url"`
+		IsPublic    *bool   `json:"is_public"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
@@ -44,6 +46,20 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := auth.ClaimsFrom(r.Context())
+
+	if body.IsPublic != nil {
+		user, err := h.users.UpdatePublic(r.Context(), claims.UserID, *body.IsPublic)
+		if err != nil || user == nil {
+			jsonErr(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		// If only toggling public, return early
+		if body.DisplayName == nil && body.AvatarURL == nil {
+			jsonOK(w, user)
+			return
+		}
+	}
+
 	user, err := h.users.UpdateProfile(r.Context(), claims.UserID, body.DisplayName, body.AvatarURL)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
@@ -90,6 +106,30 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /u/:username — public profile
+func (h *UserHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
+	username := chi.URLParam(r, "username")
+
+	user, err := h.users.GetByUsername(r.Context(), username)
+	if err != nil || user == nil || !user.IsPublic {
+		jsonErr(w, http.StatusNotFound, "profile not found")
+		return
+	}
+
+	result, err := h.media.List(r.Context(), user.ID, repository.MediaFilter{PerPage: 1000})
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	jsonOK(w, map[string]any{
+		"username":     user.Username,
+		"display_name": user.DisplayName,
+		"avatar_url":   user.AvatarURL,
+		"media":        result.Items,
+	})
 }
 
 // --- Admin routes ---
@@ -149,3 +189,4 @@ func (h *UserHandler) AdminCreateInvite(w http.ResponseWriter, r *http.Request) 
 	}
 	jsonCreated(w, map[string]string{"code": body.Code})
 }
+

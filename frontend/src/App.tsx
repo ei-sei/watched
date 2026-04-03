@@ -18,6 +18,7 @@ import Search from '@/pages/Search'
 import Stats from '@/pages/Stats'
 import Settings from '@/pages/Settings'
 import SharedList from '@/pages/SharedList'
+import PublicProfile from '@/pages/PublicProfile'
 
 import type { User } from '@/types/auth'
 
@@ -71,6 +72,7 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/share/:id" element={<SharedList />} />
+              <Route path="/u/:username" element={<PublicProfile />} />
               <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
                 <Route path="films" element={<MediaLibrary type="film" />} />
