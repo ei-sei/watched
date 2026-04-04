@@ -62,7 +62,7 @@ export default function Trending() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${
+            className={`flex-1 py-1.5 text-sm text-center whitespace-nowrap rounded-md transition-colors ${
               tab === key
                 ? 'bg-white/10 text-white font-medium'
                 : 'text-zinc-500 hover:text-zinc-300'
