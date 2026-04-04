@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: watched-api
+    restart: always
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
+      MAL_CLIENT_ID: ${MAL_CLIENT_ID:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env}
+      ENVIRONMENT: production
+      PORT: "8000"
+    networks:
+      - watched_net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: ${VITE_API_URL:?Set VITE_API_URL in .env}
+    container_name: watched-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      - api
+    networks:
+      - watched_net
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: watched-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  letsencrypt:
+    driver: local
+  certbot_webroot:
+    driver: local
+
+networks:
+  watched_net:
+    driver: bridge
