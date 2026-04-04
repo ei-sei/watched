@@ -7,11 +7,11 @@ import type { SearchResult as ApiSearchResult } from '@/api/search'
 import type { MediaType } from '@/types/media'
 
 const TABS = [
-  { value: 'multi', label: 'All' },
-  { value: 'film',  label: 'Movies' },
-  { value: 'tv',    label: 'TV' },
-  { value: 'book',  label: 'Books' },
-  { value: 'anime', label: 'Anime' },
+  { value: 'multi',   label: 'All' },
+  { value: 'film',    label: 'Movies' },
+  { value: 'tv_show', label: 'TV' },
+  { value: 'book',    label: 'Books' },
+  { value: 'anime',   label: 'Anime' },
 ] as const
 
 type Tab = typeof TABS[number]['value']
