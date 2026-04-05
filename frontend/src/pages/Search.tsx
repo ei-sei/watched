@@ -85,7 +85,7 @@ export default function Search() {
           {data.map((result) => (
             <div key={result.external_id} className="flex gap-3 bg-[#1a1a1a] rounded-lg p-3 items-start ring-1 ring-white/[0.06]">
               {result.poster_url ? (
-                <img src={result.poster_url} alt={result.title} className="w-12 h-16 object-cover rounded flex-shrink-0" />
+                <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
               ) : (
                 <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0" />
               )}
