@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, Settings, LogOut } from 'lucide-react'
+import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, Settings, LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
 const PRIMARY_NAV = [
@@ -61,6 +61,12 @@ export default function Sidebar() {
       {/* Bottom */}
       <div className="px-2 pb-3 space-y-px">
         <div className="border-t border-white/[0.06] mb-2" />
+        {user?.is_admin && (
+          <NavLink to="/admin" className={linkClass}>
+            <ShieldCheck size={15} strokeWidth={1.75} />
+            Admin
+          </NavLink>
+        )}
         <NavLink to="/settings" className={linkClass}>
           <Settings size={15} strokeWidth={1.75} />
           Settings

@@ -116,6 +116,12 @@ type SearchResult struct {
 	Extra       map[string]any `json:"extra"`
 }
 
+type InviteCode struct {
+	Code      string     `json:"code"`
+	CreatedAt time.Time  `json:"created_at"`
+	UsedAt    *time.Time `json:"used_at"`
+}
+
 type PaginatedMedia struct {
 	Items   []MediaItem `json:"items"`
 	Total   int         `json:"total"`
