@@ -38,8 +38,10 @@ client.interceptors.response.use(
         original.headers.Authorization = `Bearer ${data.access_token}`
         return client(original)
       } catch {
+        refreshQueue = []
         await storage.remove('access_token')
-        window.location.href = '/login'
+        await client.post('/auth/logout').catch(() => {})
+        window.location.replace('/login')
       } finally {
         isRefreshing = false
       }
