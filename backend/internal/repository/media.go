@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -362,12 +363,30 @@ func (r *MediaRepo) GetMissingMetadata(ctx context.Context, userID int) ([]Missi
 		}
 		if metaBytes != nil {
 			if err := json.Unmarshal(metaBytes, &item.Metadata); err != nil {
-				return nil, fmt.Errorf("unmarshal metadata for item %d: %w", item.ID, err)
+				log.Printf("GetMissingMetadata: skip item %d, bad metadata JSON: %v", item.ID, err)
+				continue
 			}
 		}
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+// CountMissingMetadata returns the number of items that need metadata enrichment
+// without fetching the full rows — used by the polling endpoint.
+func (r *MediaRepo) CountMissingMetadata(ctx context.Context, userID int) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM media_items
+		 WHERE user_id = $1
+		   AND (
+		         poster_url IS NULL
+		      OR year IS NULL
+		      OR (media_type IN ('anime', 'tv_show', 'book') AND total_progress IS NULL)
+		   )`,
+		userID,
+	).Scan(&count)
+	return count, err
 }
 
 func (r *MediaRepo) SetPoster(ctx context.Context, id int, posterURL string) error {

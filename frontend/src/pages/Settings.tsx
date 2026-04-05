@@ -75,7 +75,6 @@ function ImportCard() {
   const [missingCount, setMissingCount] = useState<number | null>(null)
   const [refetching, setRefetching] = useState(false)
   const [metaProgress, setMetaProgress] = useState<{ current: number; total: number } | null>(null)
-  const [allCaughtUp, setAllCaughtUp] = useState(false)
   const rawProgress = useImportProgress(importing)
   const displayProgress = importing ? rawProgress : lastResult ? 100 : 0
 
@@ -88,20 +87,18 @@ function ImportCard() {
   const refetchMetadata = async () => {
     setRefetching(true)
     setMetaProgress(null)
-    setAllCaughtUp(false)
     try {
       const { data } = await client.post('/import/metadata/refetch')
       if (data.queued === 0) {
         setMissingCount(0)
-        setAllCaughtUp(true)
         setRefetching(false)
         return
       }
       const total: number = data.queued
       setMetaProgress({ current: 0, total })
-      // Poll the missing-count endpoint every 3s to track real progress.
-      // Give up after total * 2s + 20s to handle items that can't be fetched.
-      const deadline = Date.now() + total * 2000 + 20000
+      // Poll every 3s. Give up after total * 3s + 60s to handle rate-limited items.
+      // 8 stale ticks = 24s of no progress before declaring done.
+      const deadline = Date.now() + total * 3000 + 60000
       let lastCount = total
       let staleTicks = 0
       const id = setInterval(async () => {
@@ -112,15 +109,14 @@ function ImportCard() {
           setMissingCount(check.count)
           if (check.count === 0) {
             clearInterval(id)
-            setAllCaughtUp(true)
             setRefetching(false)
             return
           }
-          // Stop if count hasn't changed for 3 consecutive polls or deadline passed
           if (check.count === lastCount) staleTicks++
           else staleTicks = 0
           lastCount = check.count
-          if (staleTicks >= 3 || Date.now() >= deadline) {
+          // Stop polling after 8 consecutive stale ticks (24s) or hard deadline
+          if (staleTicks >= 8 || Date.now() >= deadline) {
             clearInterval(id)
             setRefetching(false)
           }
@@ -203,18 +199,16 @@ function ImportCard() {
           <div>
             <p className="text-sm text-zinc-300">Fetch metadata</p>
             <p className="text-xs text-zinc-600 mt-0.5">
-              {allCaughtUp
-                ? 'All metadata is up to date.'
-                : missingCount === null
-                  ? 'Fills in missing posters, years, and episode/page counts across all types.'
-                  : missingCount === 0
-                    ? 'All metadata is up to date.'
-                    : `${missingCount} ${missingCount === 1 ? 'item is' : 'items are'} missing metadata.`}
+              {missingCount === null
+                ? 'Fills in missing posters, years, and episode/page counts across all types.'
+                : missingCount === 0
+                  ? 'All metadata is up to date.'
+                  : `${missingCount} ${missingCount === 1 ? 'item is' : 'items are'} missing metadata.`}
             </p>
           </div>
           <button
             onClick={refetchMetadata}
-            disabled={refetching || importing || allCaughtUp || missingCount === 0}
+            disabled={refetching || importing || missingCount === 0}
             className="flex-shrink-0 px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors disabled:opacity-40"
           >
             {refetching ? 'Fetching…' : 'Fetch'}

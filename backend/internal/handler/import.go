@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ei-sei/brsti/internal/auth"
@@ -25,6 +26,7 @@ type ImportHandler struct {
 	episodes *repository.EpisodeRepo
 	cfg      *config.Config
 	client   *http.Client
+	enrichMu sync.Mutex // guards against concurrent enrichAllMeta runs
 }
 
 func NewImportHandler(media *repository.MediaRepo, episodes *repository.EpisodeRepo, cfg *config.Config) *ImportHandler {
@@ -568,12 +570,12 @@ func (h *ImportHandler) googleBooksPoster(ctx context.Context, title string) *st
 // GET /import/metadata/missing-count
 func (h *ImportHandler) MissingMetadataCount(w http.ResponseWriter, r *http.Request) {
 	userID := auth.ClaimsFrom(r.Context()).UserID
-	items, err := h.media.GetMissingMetadata(r.Context(), userID)
+	count, err := h.media.CountMissingMetadata(r.Context(), userID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "failed to query missing metadata")
 		return
 	}
-	jsonOK(w, map[string]int{"count": len(items)})
+	jsonOK(w, map[string]int{"count": count})
 }
 
 // POST /import/metadata/refetch
@@ -588,7 +590,13 @@ func (h *ImportHandler) RefetchMetadata(w http.ResponseWriter, r *http.Request) 
 	}
 	jsonOK(w, map[string]int{"queued": len(items)})
 	if len(items) > 0 {
-		go h.enrichAllMeta(context.Background(), items)
+		go func() {
+			if !h.enrichMu.TryLock() {
+				return // a run is already in progress
+			}
+			defer h.enrichMu.Unlock()
+			h.enrichAllMeta(context.Background(), items)
+		}()
 	}
 }
 
@@ -622,6 +630,13 @@ func (h *ImportHandler) enrichAnimeMeta(ctx context.Context, item repository.Mis
 			malID = int(v)
 		case int:
 			malID = v
+		}
+	}
+	// Fallback: parse mal_id out of external_id ("mal:12345") when metadata blob
+	// doesn't carry it (e.g. items added via search rather than MAL import).
+	if malID == 0 && item.ExternalID != nil {
+		if after, ok := strings.CutPrefix(*item.ExternalID, "mal:"); ok {
+			fmt.Sscanf(after, "%d", &malID)
 		}
 	}
 	if malID == 0 {
