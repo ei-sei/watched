@@ -162,6 +162,16 @@ func (h *UserHandler) AdminUpdateFlags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	target, err := h.users.GetByID(r.Context(), id)
+	if err != nil || target == nil {
+		jsonErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.Username == "admin" {
+		jsonErr(w, http.StatusForbidden, "cannot modify the admin account")
+		return
+	}
+
 	user, err := h.users.UpdateFlags(r.Context(), id, body.IsPremium, body.IsAdmin)
 	if err != nil || user == nil {
 		jsonErr(w, http.StatusNotFound, "user not found")
