@@ -20,6 +20,7 @@ export const adminApi = {
   listUsers: () => client.get<AdminUser[]>('/admin/users'),
   updateFlags: (id: number, flags: { is_admin?: boolean; is_premium?: boolean }) =>
     client.patch<AdminUser>(`/admin/users/${id}/flags`, flags),
+  deleteUser: (id: number) => client.delete(`/admin/users/${id}`),
   listInvites: () => client.get<InviteCode[]>('/admin/invites'),
   createInvite: (code: string) => client.post<{ code: string }>('/admin/invites', { code }),
 }
