@@ -30,8 +30,12 @@ export default defineConfig({
           },
           {
             urlPattern: /^https:\/\/covers\.openlibrary\.org\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /^https:\/\/cdn\.myanimelist\.net\/.*/i,
             handler: 'CacheFirst',
-            options: { cacheName: 'ol-covers', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+            options: { cacheName: 'mal-images', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 } },
           },
         ],
       },
