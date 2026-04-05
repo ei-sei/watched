@@ -110,12 +110,16 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           command_timeout: 5m
+          envs: GHCR_TOKEN,GHCR_USER
           script: |
             cd /home/ubuntu/watched
             git pull origin main
-            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f docker-compose.selfhost.yml pull
             docker compose -f docker-compose.selfhost.yml up -d --remove-orphans
             docker image prune -af --filter "until=24h"
             sleep 5
             curl -sf http://localhost/health || echo "Health check failed!"
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
