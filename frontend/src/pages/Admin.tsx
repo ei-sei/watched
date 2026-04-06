@@ -4,7 +4,7 @@ import { adminApi, type AdminStats, type AdminUser, type ServiceStatus, type Fea
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
-import { Copy, RefreshCw, Trash2, KeyRound, LockOpen, Lock } from 'lucide-react'
+import { Copy, RefreshCw, Trash2, KeyRound, LockOpen, Lock, Eye, EyeOff } from 'lucide-react'
 
 type Tab = 'invites' | 'users' | 'flags'
 
@@ -99,24 +99,65 @@ function ResetPasswordModal({ username, onConfirm, onCancel, isPending }: {
   isPending: boolean
 }) {
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const mismatch = confirm.length > 0 && password !== confirm
+  const canSubmit = password.length >= 8 && password === confirm && !isPending
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
       <div className="bg-[#1a1a1a] rounded-xl p-6 w-full max-w-sm space-y-4 ring-1 ring-white/[0.08]">
         <h2 className="text-white font-semibold">Reset password</h2>
         <p className="text-zinc-400 text-sm">Set a new password for <span className="text-white font-medium">{username}</span>.</p>
-        <input
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="New password (min 8 chars)"
-          className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm"
-          autoFocus
-        />
+        <div className="space-y-2">
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="New password (min 8 chars)"
+              autoComplete="new-password"
+              className="w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 pr-9 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+          <div className="relative">
+            <input
+              type={showConfirm ? 'text' : 'password'}
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              className={`w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 pr-9 border focus:outline-none text-sm transition-colors ${
+                mismatch ? 'border-red-500/60 focus:border-red-500/80' : 'border-white/[0.08] focus:border-white/20'
+              }`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(v => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+              tabIndex={-1}
+            >
+              {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+          {mismatch && <p className="text-red-400 text-xs">Passwords do not match</p>}
+        </div>
         <div className="flex gap-2 justify-end">
           <button onClick={onCancel} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancel</button>
           <button
             onClick={() => onConfirm(password)}
-            disabled={password.length < 8 || isPending}
+            disabled={!canSubmit}
             className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-md transition-colors"
           >
             {isPending ? 'Saving…' : 'Reset password'}
