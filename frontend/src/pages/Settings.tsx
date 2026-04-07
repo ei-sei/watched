@@ -465,12 +465,12 @@ export default function Settings() {
           <div>
             <label className={labelClass}>Current password</label>
             <input type="password" value={pw.current} onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
-              className={inputClass} required />
+              className={inputClass} required autoComplete="current-password" />
           </div>
           <div>
             <label className={labelClass}>New password</label>
             <input type="password" value={pw.next} onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
-              className={inputClass} required minLength={8} />
+              className={inputClass} required minLength={8} autoComplete="new-password" />
           </div>
           <button type="submit" className={btnClass}>Change password</button>
         </form>

@@ -137,7 +137,7 @@ function ResetPasswordModal({ username, onConfirm, onCancel, isPending }: {
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
               placeholder="Confirm new password"
-              autoComplete="new-password"
+              autoComplete="off"
               className={`w-full bg-[#111] text-zinc-200 rounded-md px-3 py-2 pr-9 border focus:outline-none text-sm transition-colors ${
                 mismatch ? 'border-red-500/60 focus:border-red-500/80' : 'border-white/[0.08] focus:border-white/20'
               }`}
