@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { authApi } from '@/api/auth'
@@ -327,6 +328,8 @@ export default function Settings() {
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [isPublic, setIsPublic] = useState(user?.is_public ?? false)
   const [pw, setPw] = useState({ current: '', next: '' })
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false })
   const [clearing, setClearing] = useState<MediaItem['media_type'] | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<ClearTarget | null>(null)
 
@@ -356,10 +359,16 @@ export default function Settings() {
       show('New password must be at least 8 characters', 'error')
       return
     }
+    if (pw.next !== pwConfirm) {
+      show('Passwords do not match', 'error')
+      return
+    }
     try {
       await authApi.changePassword({ current_password: pw.current, new_password: pw.next })
       show('Password changed', 'success')
       setPw({ current: '', next: '' })
+      setPwConfirm('')
+      setShowPw({ current: false, next: false, confirm: false })
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 401) {
@@ -464,15 +473,78 @@ export default function Settings() {
           <h2 className="text-sm font-medium text-zinc-300">Change password</h2>
           <div>
             <label className={labelClass}>Current password</label>
-            <input type="password" value={pw.current} onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
-              className={inputClass} required autoComplete="current-password" />
+            <div className="relative">
+              <input
+                type={showPw.current ? 'text' : 'password'}
+                value={pw.current}
+                onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
+                className={`${inputClass} pr-9`}
+                required
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => ({ ...s, current: !s.current }))}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPw.current ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
           <div>
             <label className={labelClass}>New password</label>
-            <input type="password" value={pw.next} onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
-              className={inputClass} required minLength={8} autoComplete="new-password" />
+            <div className="relative">
+              <input
+                type={showPw.next ? 'text' : 'password'}
+                value={pw.next}
+                onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
+                className={`${inputClass} pr-9`}
+                required
+                minLength={8}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => ({ ...s, next: !s.next }))}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPw.next ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
           </div>
-          <button type="submit" className={btnClass}>Change password</button>
+          <div>
+            <label className={labelClass}>Confirm new password</label>
+            <div className="relative">
+              <input
+                type={showPw.confirm ? 'text' : 'password'}
+                value={pwConfirm}
+                onChange={(e) => setPwConfirm(e.target.value)}
+                className={`${inputClass} pr-9 ${pwConfirm.length > 0 && pw.next !== pwConfirm ? 'border-red-500/60 focus:border-red-500/80' : ''}`}
+                required
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => ({ ...s, confirm: !s.confirm }))}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPw.confirm ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+            {pwConfirm.length > 0 && pw.next !== pwConfirm && (
+              <p className="text-red-400 text-xs mt-1.5">Passwords do not match</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={!pw.current || pw.next.length < 8 || pw.next !== pwConfirm}
+            className={btnClass}
+          >
+            Change password
+          </button>
         </form>
 
         {/* Import */}
