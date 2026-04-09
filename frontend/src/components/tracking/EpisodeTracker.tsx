@@ -42,6 +42,10 @@ export default function EpisodeTracker({ item }: Props) {
           const maxEp = watched[0]?.episode_number ?? 0
           const canAdd = watchedCount < s.episode_count
           const canRemove = watchedCount > 0
+          const lastWatched = watched.find((e) => e.watched_at)?.watched_at
+          const dateLabel = lastWatched
+            ? new Date(lastWatched).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+            : null
 
           return (
             <div key={s.season_number} className="flex items-center gap-3 py-1">
@@ -61,6 +65,9 @@ export default function EpisodeTracker({ item }: Props) {
                   className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
                 >+</button>
               </div>
+              {dateLabel && (
+                <span className="text-xs text-zinc-600">{dateLabel}</span>
+              )}
             </div>
           )
         })}
