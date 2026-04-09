@@ -1,35 +1,86 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { episodesApi } from '@/api/episodes'
-import type { EpisodeLog } from '@/types/media'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import type { MediaItem, EpisodeLog } from '@/types/media'
 
-interface Props { mediaId: number }
+interface Season {
+  season_number: number
+  episode_count: number
+}
 
-export default function EpisodeTracker({ mediaId }: Props) {
+interface Props { item: MediaItem }
+
+export default function EpisodeTracker({ item }: Props) {
   const qc = useQueryClient()
-  const { data: episodes, isLoading } = useQuery({
-    queryKey: ['episodes', mediaId],
-    queryFn: () => episodesApi.list(mediaId).then((r) => r.data),
+  const seasons = (item.metadata?.seasons as Season[] | undefined) ?? []
+
+  const { data: episodes = [] } = useQuery({
+    queryKey: ['episodes', item.id],
+    queryFn: () => episodesApi.list(item.id).then((r) => r.data),
   })
 
   const log = useMutation({
     mutationFn: ({ season, episode }: { season: number; episode: number }) =>
-      episodesApi.log(mediaId, { season_number: season, episode_number: episode }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['episodes', mediaId] }),
+      episodesApi.log(item.id, { season, episode }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['episodes', item.id] }),
   })
 
   const remove = useMutation({
-    mutationFn: (epId: number) => episodesApi.delete(mediaId, epId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['episodes', mediaId] }),
+    mutationFn: (epId: number) => episodesApi.delete(item.id, epId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['episodes', item.id] }),
   })
 
+  if (seasons.length > 0) {
+    return (
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3">Episodes</h3>
+        {seasons.map((s) => {
+          const watched = episodes
+            .filter((e) => e.season_number === s.season_number)
+            .sort((a, b) => b.episode_number - a.episode_number)
+          const watchedCount = watched.length
+          const maxEp = watched[0]?.episode_number ?? 0
+          const canAdd = watchedCount < s.episode_count
+          const canRemove = watchedCount > 0
+
+          return (
+            <div key={s.season_number} className="flex items-center gap-3 py-1">
+              <span className="text-sm text-zinc-400 w-20 flex-shrink-0">Season {s.season_number}</span>
+              <div className="flex items-center gap-2 bg-[#1a1a1a] rounded-md border border-white/[0.08] px-1">
+                <button
+                  onClick={() => watched[0] && remove.mutate(watched[0].id)}
+                  disabled={!canRemove || remove.isPending}
+                  className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
+                >−</button>
+                <span className="text-sm text-zinc-300 w-12 text-center tabular-nums">
+                  {watchedCount} / {s.episode_count}
+                </span>
+                <button
+                  onClick={() => log.mutate({ season: s.season_number, episode: maxEp + 1 })}
+                  disabled={!canAdd || log.isPending}
+                  className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
+                >+</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Fallback for items without season data
+  return <ManualEpisodeTracker episodes={episodes} log={log} remove={remove} />
+}
+
+function ManualEpisodeTracker({ episodes, log, remove }: {
+  episodes: EpisodeLog[]
+  log: any
+  remove: any
+}) {
   const [newSeason, setNewSeason] = useState(1)
   const [newEpisode, setNewEpisode] = useState(1)
 
-  if (isLoading) return <LoadingSpinner />
-
-  const byseason = (episodes ?? []).reduce<Record<number, EpisodeLog[]>>((acc, ep) => {
+  const byseason = episodes.reduce<Record<number, EpisodeLog[]>>((acc, ep) => {
     if (!acc[ep.season_number]) acc[ep.season_number] = []
     acc[ep.season_number].push(ep)
     return acc
@@ -37,8 +88,7 @@ export default function EpisodeTracker({ mediaId }: Props) {
 
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold text-white">Episode Tracker</h3>
-
+      <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Episodes</h3>
       <div className="flex gap-2 items-end">
         <div>
           <label className="block text-xs text-slate-400 mb-1">Season</label>
@@ -55,7 +105,6 @@ export default function EpisodeTracker({ mediaId }: Props) {
           Log
         </button>
       </div>
-
       {Object.entries(byseason).sort(([a], [b]) => +a - +b).map(([season, eps]) => (
         <div key={season}>
           <p className="text-sm font-medium text-slate-300 mb-2">Season {season}</p>
