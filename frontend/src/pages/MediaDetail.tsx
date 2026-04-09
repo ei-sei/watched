@@ -122,7 +122,7 @@ export default function MediaDetail() {
       {(item.media_type === 'book' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Progress</h3>
-          {item.media_type === 'tv_show' ? (
+          {(item.media_type === 'tv_show' || item.media_type === 'anime') ? (
             <TVSeasonProgress item={item} />
           ) : (
             <ProgressTracker key={`${item.id}-${item.current_progress}-${item.total_progress}`} item={item} />
@@ -137,9 +137,19 @@ export default function MediaDetail() {
               {refreshing ? 'Updating…' : onCooldown ? `Refresh available in ${Math.ceil(cooldownRemaining / 60000)}m` : 'Refresh episode count from TMDB'}
             </button>
           )}
+          {item.media_type === 'anime' && item.external_id?.startsWith('mal:') && (
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing || onCooldown}
+              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Updating…' : onCooldown ? `Refresh available in ${Math.ceil(cooldownRemaining / 60000)}m` : 'Refresh episode count from MAL'}
+            </button>
+          )}
         </div>
       )}
-      {item.media_type === 'tv_show' && <EpisodeTracker item={item} />}
+      {(item.media_type === 'tv_show' || item.media_type === 'anime') && <EpisodeTracker item={item} />}
       {item.media_type === 'book' && <ChapterTracker mediaId={item.id} />}
     </div>
   )
