@@ -11,6 +11,9 @@ if ('serviceWorker' in navigator) {
     reloading = true
     window.location.reload()
   })
+
+  // Force an update check on every page load instead of waiting for the browser cycle
+  navigator.serviceWorker.ready.then((reg) => reg.update())
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
