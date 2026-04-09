@@ -34,7 +34,12 @@ func NewMediaHandler(media *repository.MediaRepo, episodes *repository.EpisodeRe
 	}
 }
 
-func (h *MediaHandler) fetchTMDBEpisodes(ctx context.Context, tmdbID string) *int {
+type tmdbTVData struct {
+	TotalEpisodes *int
+	Seasons       []map[string]any
+}
+
+func (h *MediaHandler) fetchTMDBData(ctx context.Context, tmdbID string) *tmdbTVData {
 	if h.tmdbKey == "" {
 		return nil
 	}
@@ -50,11 +55,25 @@ func (h *MediaHandler) fetchTMDBEpisodes(ctx context.Context, tmdbID string) *in
 	defer resp.Body.Close()
 	var raw struct {
 		NumberOfEpisodes *int `json:"number_of_episodes"`
+		Seasons          []struct {
+			SeasonNumber int `json:"season_number"`
+			EpisodeCount int `json:"episode_count"`
+		} `json:"seasons"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil
 	}
-	return raw.NumberOfEpisodes
+	seasons := make([]map[string]any, 0)
+	for _, s := range raw.Seasons {
+		if s.SeasonNumber == 0 {
+			continue // skip specials
+		}
+		seasons = append(seasons, map[string]any{
+			"season_number": s.SeasonNumber,
+			"episode_count": s.EpisodeCount,
+		})
+	}
+	return &tmdbTVData{TotalEpisodes: raw.NumberOfEpisodes, Seasons: seasons}
 }
 
 func userIDFrom(r *http.Request) int {
@@ -116,10 +135,20 @@ func (h *MediaHandler) Create(w http.ResponseWriter, r *http.Request) {
 		body.Status = models.StatusWantTo
 	}
 
-	// Auto-fill total episodes from TMDB for TV shows
-	if body.MediaType == models.MediaTypeTVShow && body.TotalProgress == nil && body.ExternalID != nil {
+	// Auto-fill total episodes and season breakdown from TMDB for TV shows
+	if body.MediaType == models.MediaTypeTVShow && body.ExternalID != nil {
 		if tmdbID := strings.TrimPrefix(*body.ExternalID, "tmdb:"); tmdbID != *body.ExternalID {
-			body.TotalProgress = h.fetchTMDBEpisodes(r.Context(), tmdbID)
+			if tvData := h.fetchTMDBData(r.Context(), tmdbID); tvData != nil {
+				if body.TotalProgress == nil {
+					body.TotalProgress = tvData.TotalEpisodes
+				}
+				if len(tvData.Seasons) > 0 {
+					if body.Metadata == nil {
+						body.Metadata = map[string]any{}
+					}
+					body.Metadata["seasons"] = tvData.Seasons
+				}
+			}
 		}
 	}
 
@@ -178,13 +207,22 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusBadRequest, "not a TMDB item")
 		return
 	}
-	total := h.fetchTMDBEpisodes(r.Context(), tmdbID)
-	if total == nil {
+	tvData := h.fetchTMDBData(r.Context(), tmdbID)
+	if tvData == nil || tvData.TotalEpisodes == nil {
 		jsonErr(w, http.StatusServiceUnavailable, "could not fetch from TMDB")
 		return
 	}
+	// Merge seasons into existing metadata
+	meta := item.Metadata
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	if len(tvData.Seasons) > 0 {
+		meta["seasons"] = tvData.Seasons
+	}
 	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
-		TotalProgress: total,
+		TotalProgress: tvData.TotalEpisodes,
+		Metadata:      meta,
 	})
 	if err != nil || updated == nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
