@@ -2,7 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-import { AuthContext, type AuthContextValue } from '@/hooks/useAuth'
+import { AuthContext, useAuth, type AuthContextValue } from '@/hooks/useAuth'
 import { ToastProvider } from '@/components/ui/Toast'
 import { authApi } from '@/api/auth'
 import { storage } from '@/platform/storage'
@@ -33,7 +33,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     registerSyncOnReconnect()
-    const timeout = setTimeout(() => setIsLoading(false), 10000)
+    const timeout = setTimeout(() => setIsLoading(false), 5000)
     authApi.me()
       .then((r) => setUser(r.data))
       .catch(() => setUser(null))
@@ -59,8 +59,13 @@ function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const token = localStorage.getItem('access_token')
-  if (!token) return <Navigate to="/login" replace />
+  const { user, isLoading } = useAuth()
+  if (isLoading) return (
+    <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+  if (!user) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
