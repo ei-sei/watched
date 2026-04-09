@@ -33,10 +33,11 @@ function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     registerSyncOnReconnect()
+    const timeout = setTimeout(() => setIsLoading(false), 10000)
     authApi.me()
       .then((r) => setUser(r.data))
       .catch(() => setUser(null))
-      .finally(() => setIsLoading(false))
+      .finally(() => { clearTimeout(timeout); setIsLoading(false) })
   }, [])
 
   const login = async (username: string, password: string) => {
