@@ -35,7 +35,7 @@ jobs:
       - name: Vet & test backend
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/watched_test?sslmode=disable
-          JWT_SECRET_KEY: test-secret-not-for-production
+          JWT_SECRET_KEY: ${{ github.sha }}
         run: |
           cd backend
           go vet ./...

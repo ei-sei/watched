@@ -4,7 +4,11 @@
 
 set -e
 
-DB_URL="${DATABASE_URL:-postgres://brsti:localdevpassword_placeholder@localhost/brsti_db?sslmode=disable}"
+if [ -z "$DATABASE_URL" ]; then
+  echo "Error: DATABASE_URL environment variable is required" >&2
+  exit 1
+fi
+DB_URL="$DATABASE_URL"
 
 # Get all anime missing posters
 IDS=$(psql "$DB_URL" -t -c "SELECT id || ':' || metadata->>'mal_id' FROM media_items WHERE media_type='anime' AND poster_url IS NULL AND metadata->>'mal_id' IS NOT NULL;")
