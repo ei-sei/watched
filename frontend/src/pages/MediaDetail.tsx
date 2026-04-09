@@ -76,9 +76,9 @@ export default function MediaDetail() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
-      <div className="flex gap-6">
+      <div className="flex flex-col sm:flex-row gap-5">
         {item.poster_url && (
-          <img src={item.poster_url} alt={item.title} className="w-32 sm:w-48 rounded-lg object-cover flex-shrink-0 shadow-lg" />
+          <img src={item.poster_url} alt={item.title} className="w-32 sm:w-44 rounded-lg object-cover flex-shrink-0 shadow-lg self-start" />
         )}
         <div className="flex-1 min-w-0 space-y-4">
           <div className="flex items-start justify-between gap-2">
@@ -122,7 +122,7 @@ export default function MediaDetail() {
           {/* Rating row */}
           <div className="space-y-1.5">
             <p className="text-xs text-zinc-600 uppercase tracking-wider">Rating</p>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => {
                 const active = item.rating !== null && item.rating !== undefined && n <= item.rating
                 const isSelected = item.rating === n
