@@ -144,6 +144,7 @@ func main() {
 			r.Get("/admin/users", userH.AdminList)
 			r.Patch("/admin/users/{id}/flags", userH.AdminUpdateFlags)
 			r.Delete("/admin/users/{id}", userH.AdminDeleteUser)
+			r.Get("/admin/stats", userH.AdminStats)
 			r.Get("/admin/invites", userH.AdminListInvites)
 			r.Post("/admin/invites", userH.AdminCreateInvite)
 			r.Delete("/admin/invites/{code}", userH.AdminDeleteInvite)

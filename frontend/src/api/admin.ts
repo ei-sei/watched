@@ -16,7 +16,17 @@ export interface AdminUser {
   created_at: string
 }
 
+export interface AdminStats {
+  total_users: number
+  total_items: number
+  total_episodes: number
+  total_chapters: number
+  unused_invites: number
+  db_healthy: boolean
+}
+
 export const adminApi = {
+  getStats: () => client.get<AdminStats>('/admin/stats'),
   listUsers: () => client.get<AdminUser[]>('/admin/users'),
   updateFlags: (id: number, flags: { is_admin?: boolean; is_premium?: boolean }) =>
     client.patch<AdminUser>(`/admin/users/${id}/flags`, flags),

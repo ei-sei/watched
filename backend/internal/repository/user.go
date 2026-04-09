@@ -147,6 +147,31 @@ func (r *UserRepo) DeleteInvite(ctx context.Context, code string) error {
 	return nil
 }
 
+type AdminStats struct {
+	TotalUsers       int  `json:"total_users"`
+	TotalItems       int  `json:"total_items"`
+	TotalEpisodes    int  `json:"total_episodes"`
+	TotalChapters    int  `json:"total_chapters"`
+	UnusedInvites    int  `json:"unused_invites"`
+	DBHealthy        bool `json:"db_healthy"`
+}
+
+func (r *UserRepo) GetAdminStats(ctx context.Context) (*AdminStats, error) {
+	s := &AdminStats{DBHealthy: true}
+	err := r.db.QueryRow(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM users),
+			(SELECT COUNT(*) FROM media_items),
+			(SELECT COUNT(*) FROM tv_episode_logs),
+			(SELECT COUNT(*) FROM book_chapter_logs),
+			(SELECT COUNT(*) FROM invite_codes WHERE used_at IS NULL)
+	`).Scan(&s.TotalUsers, &s.TotalItems, &s.TotalEpisodes, &s.TotalChapters, &s.UnusedInvites)
+	if err != nil {
+		s.DBHealthy = false
+	}
+	return s, nil
+}
+
 func (r *UserRepo) UseInvite(ctx context.Context, code string) error {
 	tag, err := r.db.Exec(ctx,
 		`UPDATE invite_codes SET used_at = NOW() WHERE code = $1 AND used_at IS NULL`, code)

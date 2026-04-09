@@ -203,6 +203,16 @@ func (h *UserHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /admin/stats
+func (h *UserHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.users.GetAdminStats(r.Context())
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, stats)
+}
+
 // GET /admin/invites
 func (h *UserHandler) AdminListInvites(w http.ResponseWriter, r *http.Request) {
 	codes, err := h.users.ListInvites(r.Context())
