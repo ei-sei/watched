@@ -42,7 +42,8 @@ export default function EpisodeTracker({ item }: Props) {
           const maxEp = watched[0]?.episode_number ?? 0
           const canAdd = watchedCount < s.episode_count
           const canRemove = watchedCount > 0
-          const lastWatched = watched.find((e) => e.watched_at)?.watched_at
+          const isComplete = watchedCount === s.episode_count && s.episode_count > 0
+          const lastWatched = isComplete ? watched.find((e) => e.watched_at)?.watched_at : null
           const dateLabel = lastWatched
             ? new Date(lastWatched).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
             : null
