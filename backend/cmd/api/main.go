@@ -45,7 +45,7 @@ func main() {
 	// Handlers
 	authH   := handler.NewAuthHandler(userRepo, cfg)
 	userH   := handler.NewUserHandler(userRepo, mediaRepo, cfg)
-	mediaH  := handler.NewMediaHandler(mediaRepo, episodeRepo, chapterRepo)
+	mediaH  := handler.NewMediaHandler(mediaRepo, episodeRepo, chapterRepo, cfg.TMDBKey)
 	listH   := handler.NewListHandler(listRepo, mediaRepo)
 	searchH := handler.NewSearchHandler(cfg)
 	statsH  := handler.NewStatsHandler(mediaRepo)
@@ -99,6 +99,7 @@ func main() {
 				r.Get("/", mediaH.Get)
 				r.Patch("/", mediaH.Update)
 				r.Delete("/", mediaH.Delete)
+				r.Post("/refresh", mediaH.RefreshFromTMDB)
 
 				// TV episodes
 				r.Get("/episodes", mediaH.ListEpisodes)
