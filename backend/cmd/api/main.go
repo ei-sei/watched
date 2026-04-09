@@ -100,6 +100,8 @@ func main() {
 				r.Patch("/", mediaH.Update)
 				r.Delete("/", mediaH.Delete)
 				r.Post("/refresh", mediaH.RefreshFromTMDB)
+				r.Post("/seasons", mediaH.AddAnimeSeason)
+				r.Delete("/seasons/{seasonNum}", mediaH.RemoveAnimeSeason)
 
 				// TV episodes
 				r.Get("/episodes", mediaH.ListEpisodes)
