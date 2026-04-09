@@ -135,6 +135,18 @@ func (r *UserRepo) CreateInvite(ctx context.Context, code string) error {
 	return err
 }
 
+func (r *UserRepo) DeleteInvite(ctx context.Context, code string) error {
+	tag, err := r.db.Exec(ctx,
+		`DELETE FROM invite_codes WHERE code = $1 AND used_at IS NULL`, code)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("invite code not found or already used")
+	}
+	return nil
+}
+
 func (r *UserRepo) UseInvite(ctx context.Context, code string) error {
 	tag, err := r.db.Exec(ctx,
 		`UPDATE invite_codes SET used_at = NOW() WHERE code = $1 AND used_at IS NULL`, code)

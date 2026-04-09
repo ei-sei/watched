@@ -216,6 +216,16 @@ func (h *UserHandler) AdminListInvites(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, codes)
 }
 
+// DELETE /admin/invites/{code}
+func (h *UserHandler) AdminDeleteInvite(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if err := h.users.DeleteInvite(r.Context(), code); err != nil {
+		jsonErr(w, http.StatusNotFound, "invite code not found or already used")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /admin/invites
 func (h *UserHandler) AdminCreateInvite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
