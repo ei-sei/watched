@@ -70,11 +70,10 @@ export interface SearchResponse {
 }
 
 export interface StatsSummary {
-  films: { total: number; this_month: number; avg_rating: number | null }
+  films:   { total: number; this_month: number; avg_rating: number | null }
   tv_shows: { total: number; in_progress: number; episodes_this_month: number }
-  books: { total: number; in_progress: number; chapters_this_month: number; pages_this_month: number }
-  current_streak_days: number
-  recently_completed: MediaItem[]
+  books:   { total: number; in_progress: number; chapters_this_month: number }
+  anime:   { total: number; in_progress: number; episodes_this_month: number }
 }
 
 export interface UserList {

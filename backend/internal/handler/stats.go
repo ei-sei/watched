@@ -21,6 +21,17 @@ type mediaTypeStats struct {
 	AvgRating *float64                        `json:"avg_rating"`
 }
 
+// GET /stats/summary
+func (h *StatsHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	uid := userIDFrom(r)
+	s, err := h.media.GetSummary(r.Context(), uid)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	jsonOK(w, s)
+}
+
 // GET /stats
 func (h *StatsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
