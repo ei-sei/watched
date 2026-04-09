@@ -6,7 +6,6 @@ import { AuthContext, useAuth, type AuthContextValue } from '@/hooks/useAuth'
 import { ToastProvider } from '@/components/ui/Toast'
 import { authApi } from '@/api/auth'
 import { storage } from '@/platform/storage'
-import { registerSyncOnReconnect } from '@/offline/sync'
 
 import Layout from '@/components/layout/Layout'
 import Login from '@/pages/Login'
@@ -32,7 +31,6 @@ function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    registerSyncOnReconnect()
     const timeout = setTimeout(() => setIsLoading(false), 5000)
     authApi.me()
       .then((r) => setUser(r.data))
