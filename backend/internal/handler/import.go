@@ -2,11 +2,14 @@ package handler
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ei-sei/brsti/internal/auth"
@@ -25,7 +28,16 @@ func NewImportHandler(media *repository.MediaRepo, cfg *config.Config) *ImportHa
 	return &ImportHandler{media: media, cfg: cfg, client: &http.Client{Timeout: 15 * time.Second}}
 }
 
-// MAL status → our status
+// ── Shared result type ─────────────────────────────────────────────────────────
+
+type importResult struct {
+	Imported int      `json:"imported"`
+	Skipped  int      `json:"skipped"`
+	Errors   []string `json:"errors"`
+}
+
+// ── MAL XML import ─────────────────────────────────────────────────────────────
+
 var malStatusMap = map[string]models.MediaStatus{
 	"Watching":      models.StatusInProgress,
 	"watching":      models.StatusInProgress,
@@ -38,8 +50,6 @@ var malStatusMap = map[string]models.MediaStatus{
 	"Plan to Watch": models.StatusWantTo,
 	"plan_to_watch": models.StatusWantTo,
 }
-
-// ── XML import ────────────────────────────────────────────────────────────────
 
 type malXMLList struct {
 	Anime []malXMLAnime `xml:"anime"`
@@ -57,22 +67,11 @@ type malXMLAnime struct {
 	Watched  int     `xml:"my_watched_episodes"`
 }
 
-// POST /import/mal/file  (multipart, field: "file")
-func (h *ImportHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(5 << 20); err != nil { // 5MB
-		jsonErr(w, http.StatusBadRequest, "file too large or invalid")
-		return
-	}
-	f, _, err := r.FormFile("file")
+// POST /import/mal  (multipart, field: "file")
+func (h *ImportHandler) ImportMAL(w http.ResponseWriter, r *http.Request) {
+	data, err := readUpload(r)
 	if err != nil {
-		jsonErr(w, http.StatusBadRequest, "missing file field")
-		return
-	}
-	defer f.Close()
-
-	data, err := io.ReadAll(f)
-	if err != nil {
-		jsonErr(w, http.StatusBadRequest, "could not read file")
+		jsonErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -89,172 +88,6 @@ func (h *ImportHandler) ImportXML(w http.ResponseWriter, r *http.Request) {
 	if len(toEnrich) > 0 {
 		go h.enrichPosters(context.Background(), toEnrich)
 	}
-}
-
-// ── Username import (MAL API v2) ──────────────────────────────────────────────
-
-type malAPIResponse struct {
-	Data []struct {
-		Node struct {
-			ID          int    `json:"id"`
-			Title       string `json:"title"`
-			MainPicture *struct {
-				Large string `json:"large"`
-			} `json:"main_picture"`
-		} `json:"node"`
-		ListStatus struct {
-			Status          string  `json:"status"`
-			Score           float64 `json:"score"`
-			NumEpsWatched   int     `json:"num_episodes_watched"`
-			StartDate       string  `json:"start_date"`
-			FinishDate      string  `json:"finish_date"`
-		} `json:"list_status"`
-	} `json:"data"`
-	Paging struct {
-		Next string `json:"next"`
-	} `json:"paging"`
-}
-
-// POST /import/mal/username  body: {"username":"..."}
-func (h *ImportHandler) ImportUsername(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.MALClientID == "" {
-		jsonErr(w, http.StatusServiceUnavailable, "MAL_CLIENT_ID not configured")
-		return
-	}
-
-	var body struct {
-		Username string `json:"username"`
-	}
-	if err := decode(r, &body); err != nil || body.Username == "" {
-		jsonErr(w, http.StatusBadRequest, "username required")
-		return
-	}
-
-	animes, err := h.fetchMALList(r.Context(), body.Username)
-	if err != nil {
-		jsonErr(w, http.StatusBadGateway, "could not fetch MAL list: "+err.Error())
-		return
-	}
-
-	userID := auth.ClaimsFrom(r.Context()).UserID
-
-	// Convert API format to XML format struct for shared upsert logic
-	var items []malXMLAnime
-	for _, entry := range animes.Data {
-		score := entry.ListStatus.Score
-		img := ""
-		if entry.Node.MainPicture != nil {
-			img = entry.Node.MainPicture.Large
-		}
-		items = append(items, malXMLAnime{
-			ID:     entry.Node.ID,
-			Title:  entry.Node.Title,
-			Image:  img,
-			Score:  score,
-			Status: entry.ListStatus.Status,
-			Start:  entry.ListStatus.StartDate,
-			Finish: entry.ListStatus.FinishDate,
-		})
-	}
-
-	result, toEnrich := h.upsertAnimeList(r.Context(), userID, items)
-	jsonOK(w, result)
-
-	if len(toEnrich) > 0 {
-		go h.enrichPosters(context.Background(), toEnrich)
-	}
-}
-
-func (h *ImportHandler) fetchMALList(ctx context.Context, username string) (*malAPIResponse, error) {
-	url := fmt.Sprintf(
-		"https://api.myanimelist.net/v2/users/%s/animelist?fields=list_status&limit=1000&nsfw=true",
-		username,
-	)
-
-	var combined malAPIResponse
-	for url != "" {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("X-MAL-CLIENT-ID", h.cfg.MALClientID)
-
-		resp, err := h.client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("MAL user not found")
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("MAL API error: %s", resp.Status)
-		}
-
-		var page malAPIResponse
-		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
-			return nil, err
-		}
-		combined.Data = append(combined.Data, page.Data...)
-		url = page.Paging.Next
-	}
-	return &combined, nil
-}
-
-// ── Jikan poster enrichment ───────────────────────────────────────────────────
-
-type enrichItem struct {
-	id    int
-	malID int
-}
-
-func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
-	url := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d", malID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil
-	}
-	resp, err := h.client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil
-	}
-	defer resp.Body.Close()
-
-	var raw struct {
-		Data struct {
-			Images struct {
-				JPG struct {
-					LargeImageURL *string `json:"large_image_url"`
-				} `json:"jpg"`
-			} `json:"images"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil
-	}
-	return raw.Data.Images.JPG.LargeImageURL
-}
-
-// enrichPosters fetches Jikan posters for newly imported items that had no
-// poster URL from the source data. Runs as a background goroutine after the
-// HTTP response has already been sent, so it uses a detached context.
-func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
-	for _, item := range items {
-		poster := h.jikanPoster(ctx, item.malID)
-		if poster != nil {
-			_ = h.media.SetPoster(ctx, item.id, *poster)
-		}
-		time.Sleep(350 * time.Millisecond)
-	}
-}
-
-// ── Shared upsert logic ────────────────────────────────────────────────────────
-
-type importResult struct {
-	Imported int      `json:"imported"`
-	Skipped  int      `json:"skipped"`
-	Errors   []string `json:"errors"`
 }
 
 func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items []malXMLAnime) (importResult, []enrichItem) {
@@ -274,15 +107,12 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			rating = &r
 		}
 
-		// Skip if already in library
 		existing, _ := h.media.GetByExternalID(ctx, userID, externalID)
 		if existing != nil {
 			result.Skipped++
 			continue
 		}
 
-		// Use the poster URL from the source data if available.
-		// Items without a poster are collected for background Jikan enrichment.
 		var poster *string
 		if a.Image != "" {
 			poster = &a.Image
@@ -326,4 +156,344 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 	}
 
 	return result, toEnrich
+}
+
+// ── Jikan poster enrichment ────────────────────────────────────────────────────
+
+type enrichItem struct {
+	id    int
+	malID int
+}
+
+func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
+	url := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d", malID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var raw struct {
+		Data struct {
+			Images struct {
+				JPG struct {
+					LargeImageURL *string `json:"large_image_url"`
+				} `json:"jpg"`
+			} `json:"images"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil
+	}
+	return raw.Data.Images.JPG.LargeImageURL
+}
+
+// enrichPosters runs in a background goroutine after the response is sent.
+func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
+	for _, item := range items {
+		poster := h.jikanPoster(ctx, item.malID)
+		if poster != nil {
+			_ = h.media.SetPoster(ctx, item.id, *poster)
+		}
+		time.Sleep(350 * time.Millisecond)
+	}
+}
+
+// ── Letterboxd CSV import ──────────────────────────────────────────────────────
+
+// POST /import/letterboxd  (multipart, field: "file")
+// Accepts any Letterboxd CSV export (films.csv, diary.csv, watchlist.csv, ratings.csv).
+func (h *ImportHandler) ImportLetterboxd(w http.ResponseWriter, r *http.Request) {
+	data, err := readUpload(r)
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	records, err := csv.NewReader(strings.NewReader(string(data))).ReadAll()
+	if err != nil || len(records) < 2 {
+		jsonErr(w, http.StatusBadRequest, "invalid CSV file")
+		return
+	}
+
+	// Build header index (case-insensitive)
+	idx := headerIndex(records[0])
+	nameColRaw, ok := idx["name"]
+	if !ok {
+		jsonErr(w, http.StatusBadRequest, "CSV must have a Name column")
+		return
+	}
+	nameCol := nameColRaw.(int)
+
+	yearCol   := idx["year"]
+	ratingCol := idx["rating"]
+	uriCol    := idx["letterboxd uri"]
+
+	// If there's a Rating column we treat entries as watched films (completed).
+	// Watchlist exports have no Rating column → want_to.
+	_, hasRating := ratingCol.(int)
+	defaultStatus := models.StatusWantTo
+	if hasRating {
+		defaultStatus = models.StatusCompleted
+	}
+
+	userID := auth.ClaimsFrom(r.Context()).UserID
+	result := importResult{Errors: []string{}}
+
+	for _, row := range records[1:] {
+		if len(row) <= nameCol {
+			continue
+		}
+		title := strings.TrimSpace(row[nameCol])
+		if title == "" {
+			continue
+		}
+
+		var year *int
+		if col, ok := yearCol.(int); ok && col < len(row) {
+			if y, err := strconv.Atoi(strings.TrimSpace(row[col])); err == nil && y > 0 {
+				year = &y
+			}
+		}
+
+		var externalID *string
+		if col, ok := uriCol.(int); ok && col < len(row) {
+			slug := letterboxdSlug(row[col])
+			if slug != "" {
+				s := "lb:" + slug
+				externalID = &s
+			}
+		}
+
+		if externalID != nil {
+			existing, _ := h.media.GetByExternalID(r.Context(), userID, *externalID)
+			if existing != nil {
+				result.Skipped++
+				continue
+			}
+		}
+
+		var rating *float64
+		if col, ok := ratingCol.(int); ok && col < len(row) {
+			if rv, err := strconv.ParseFloat(strings.TrimSpace(row[col]), 64); err == nil && rv > 0 {
+				// Letterboxd uses 0.5–5.0; convert to 1–10
+				v := rv * 2
+				rating = &v
+			}
+		}
+
+		in := repository.CreateMediaInput{
+			UserID:     userID,
+			MediaType:  models.MediaTypeFilm,
+			ExternalID: externalID,
+			Title:      title,
+			Year:       year,
+			Status:     defaultStatus,
+		}
+
+		created, err := h.media.Create(r.Context(), in)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", title, err))
+			continue
+		}
+
+		if rating != nil && created != nil {
+			_, _ = h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating})
+		}
+
+		result.Imported++
+	}
+
+	jsonOK(w, result)
+}
+
+// letterboxdSlug extracts the film slug from a Letterboxd URI.
+// e.g. "https://letterboxd.com/film/oppenheimer-2023/" → "oppenheimer-2023"
+func letterboxdSlug(uri string) string {
+	uri = strings.TrimRight(uri, "/")
+	parts := strings.Split(uri, "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
+}
+
+// ── Goodreads CSV import ───────────────────────────────────────────────────────
+
+var goodreadsShelfMap = map[string]models.MediaStatus{
+	"read":              models.StatusCompleted,
+	"currently-reading": models.StatusInProgress,
+	"to-read":           models.StatusWantTo,
+}
+
+// POST /import/goodreads  (multipart, field: "file")
+func (h *ImportHandler) ImportGoodreads(w http.ResponseWriter, r *http.Request) {
+	data, err := readUpload(r)
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	records, err := csv.NewReader(strings.NewReader(string(data))).ReadAll()
+	if err != nil || len(records) < 2 {
+		jsonErr(w, http.StatusBadRequest, "invalid CSV file")
+		return
+	}
+
+	idx := headerIndex(records[0])
+
+	titleColRaw, ok := idx["title"]
+	if !ok {
+		jsonErr(w, http.StatusBadRequest, "CSV must have a Title column")
+		return
+	}
+	titleCol := titleColRaw.(int)
+
+	bookIDCol     := idx["book id"]
+	authorCol     := idx["author l-f"]
+	if _, ok := authorCol.(int); !ok {
+		authorCol = idx["author"]
+	}
+	ratingCol     := idx["my rating"]
+	pagesCol      := idx["number of pages"]
+	yearCol       := idx["original publication year"]
+	shelfCol      := idx["exclusive shelf"]
+
+	userID := auth.ClaimsFrom(r.Context()).UserID
+	result := importResult{Errors: []string{}}
+
+	for _, row := range records[1:] {
+		if len(row) <= titleCol {
+			continue
+		}
+		title := strings.TrimSpace(row[titleCol])
+		if title == "" {
+			continue
+		}
+
+		var externalID *string
+		if col, ok := bookIDCol.(int); ok && col < len(row) {
+			if id := strings.TrimSpace(row[col]); id != "" {
+				s := "gr:" + id
+				externalID = &s
+			}
+		}
+
+		if externalID != nil {
+			existing, _ := h.media.GetByExternalID(r.Context(), userID, *externalID)
+			if existing != nil {
+				result.Skipped++
+				continue
+			}
+		}
+
+		status := models.StatusWantTo
+		if col, ok := shelfCol.(int); ok && col < len(row) {
+			if s, mapped := goodreadsShelfMap[strings.TrimSpace(row[col])]; mapped {
+				status = s
+			}
+		}
+
+		var year *int
+		if col, ok := yearCol.(int); ok && col < len(row) {
+			if y, err := strconv.Atoi(strings.TrimSpace(row[col])); err == nil && y > 0 {
+				year = &y
+			}
+		}
+
+		var totalProgress *int
+		if col, ok := pagesCol.(int); ok && col < len(row) {
+			if p, err := strconv.Atoi(strings.TrimSpace(row[col])); err == nil && p > 0 {
+				totalProgress = &p
+			}
+		}
+
+		var authors []string
+		if col, ok := authorCol.(int); ok && col < len(row) {
+			// Goodreads stores as "Last, First" — reverse to "First Last"
+			if a := strings.TrimSpace(row[col]); a != "" {
+				authors = []string{reverseAuthorName(a)}
+			}
+		}
+
+		extra := map[string]any{}
+		if len(authors) > 0 {
+			extra["authors"] = authors
+		}
+
+		var rating *float64
+		if col, ok := ratingCol.(int); ok && col < len(row) {
+			if rv, err := strconv.ParseFloat(strings.TrimSpace(row[col]), 64); err == nil && rv > 0 {
+				// Goodreads uses 1–5; convert to 1–10
+				v := rv * 2
+				rating = &v
+			}
+		}
+
+		in := repository.CreateMediaInput{
+			UserID:        userID,
+			MediaType:     models.MediaTypeBook,
+			ExternalID:    externalID,
+			Title:         title,
+			Year:          year,
+			Status:        status,
+			TotalProgress: totalProgress,
+			Metadata:      extra,
+		}
+
+		created, err := h.media.Create(r.Context(), in)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", title, err))
+			continue
+		}
+
+		if rating != nil && created != nil {
+			_, _ = h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating})
+		}
+
+		result.Imported++
+	}
+
+	jsonOK(w, result)
+}
+
+// reverseAuthorName converts "Last, First" → "First Last".
+func reverseAuthorName(name string) string {
+	parts := strings.SplitN(name, ", ", 2)
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[1]) + " " + strings.TrimSpace(parts[0])
+	}
+	return name
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+// readUpload reads the "file" field from a multipart form (max 10 MB).
+func readUpload(r *http.Request) ([]byte, error) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		return nil, fmt.Errorf("file too large or invalid")
+	}
+	f, _, err := r.FormFile("file")
+	if err != nil {
+		return nil, fmt.Errorf("missing file field")
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file")
+	}
+	return data, nil
+}
+
+// headerIndex returns a map of lowercased column name → column index.
+func headerIndex(headers []string) map[string]any {
+	idx := make(map[string]any, len(headers))
+	for i, h := range headers {
+		idx[strings.ToLower(strings.TrimSpace(h))] = i
+	}
+	return idx
 }
