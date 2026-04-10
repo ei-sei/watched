@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
+import SyncIndicator from '@/components/ui/SyncIndicator'
 import { VERSION } from '@/version'
 
 export default function Layout() {
@@ -21,10 +22,13 @@ export default function Layout() {
       {/* Mobile bottom nav */}
       <BottomNav />
 
-      {/* Version badge */}
-      <span className="fixed bottom-[4.5rem] md:bottom-2 right-2 text-[10px] text-zinc-700 select-none pointer-events-none">
-        v{VERSION}
-      </span>
+      {/* Version + sync status */}
+      <div className="fixed bottom-[4.5rem] md:bottom-2 right-2 flex items-center gap-2 pointer-events-none">
+        <SyncIndicator />
+        <span className="text-[10px] text-zinc-700 select-none">
+          v{VERSION}
+        </span>
+      </div>
     </div>
   )
 }

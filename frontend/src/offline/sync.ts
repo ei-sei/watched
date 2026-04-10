@@ -26,6 +26,7 @@ export async function flushQueue(): Promise<void> {
 // ── Full media sync ──────────────────────────────────────────────────────────
 
 export async function syncMedia(): Promise<void> {
+  window.dispatchEvent(new Event('watched:sync-start'))
   try {
     const allItems: MediaItem[] = []
     let page = 1
@@ -49,6 +50,8 @@ export async function syncMedia(): Promise<void> {
     if (stale.length > 0) await db.mediaItems.bulkDelete(stale)
   } catch {
     // Offline or auth not ready — skip silently
+  } finally {
+    window.dispatchEvent(new Event('watched:sync-end'))
   }
 }
 
