@@ -23,6 +23,17 @@ export async function flushQueue(): Promise<void> {
   }
 }
 
+// ── Stale-aware sync ─────────────────────────────────────────────────────────
+
+let lastSyncAt = 0
+const SYNC_COOLDOWN_MS = 30_000 // 30 seconds
+
+/** Runs syncMedia only if more than 30 s have passed since the last sync. */
+export function syncMediaIfStale(): void {
+  if (Date.now() - lastSyncAt < SYNC_COOLDOWN_MS) return
+  syncMedia().catch(console.error)
+}
+
 // ── Full media sync ──────────────────────────────────────────────────────────
 
 export async function syncMedia(): Promise<void> {
@@ -42,6 +53,7 @@ export async function syncMedia(): Promise<void> {
     }
 
     await db.mediaItems.bulkPut(allItems)
+    lastSyncAt = Date.now()
 
     // Prune items removed on the server
     const serverIds = new Set(allItems.map((i) => i.id))

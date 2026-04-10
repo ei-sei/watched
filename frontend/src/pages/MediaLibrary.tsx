@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocalMediaList } from '@/hooks/useLocalMedia'
 import MediaGrid from '@/components/media/MediaGrid'
 import EmptyState from '@/components/ui/EmptyState'
+import { syncMediaIfStale } from '@/offline/sync'
 import type { MediaType, MediaStatus } from '@/types/media'
 import { MEDIA_TYPE_LABELS } from '@/utils/constants'
 
@@ -22,6 +23,9 @@ export default function MediaLibrary({ type }: Props) {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  // Sync from server on each category visit (no-op if synced recently)
+  useEffect(() => { syncMediaIfStale() }, [type])
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
