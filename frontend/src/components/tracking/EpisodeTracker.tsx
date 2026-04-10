@@ -26,9 +26,10 @@ export default function EpisodeTracker({ item }: Props) {
             .sort((a, b) => b.episode_number - a.episode_number)
           const watchedCount = watched.length
           const maxEp = watched[0]?.episode_number ?? 0
-          const canAdd = watchedCount < s.episode_count
+          const ongoing = s.episode_count === 0
+          const canAdd = ongoing || watchedCount < s.episode_count
           const canRemove = watchedCount > 0
-          const isComplete = watchedCount === s.episode_count && s.episode_count > 0
+          const isComplete = !ongoing && watchedCount === s.episode_count
 
           // Derive per-season dates from episode logs so each season is independent.
           // For single-season items, fall back to item-level started_at/completed_at.
@@ -58,8 +59,8 @@ export default function EpisodeTracker({ item }: Props) {
                   disabled={!canRemove || remove.isPending}
                   className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
                 >−</button>
-                <span className="text-sm text-zinc-300 w-12 text-center tabular-nums">
-                  {watchedCount} / {s.episode_count}
+                <span className="text-sm text-zinc-300 w-20 text-center tabular-nums">
+                  {watchedCount} / {ongoing ? '∞' : s.episode_count}
                 </span>
                 <button
                   onClick={() => log.mutate({ season: s.season_number, episode: maxEp + 1 })}
