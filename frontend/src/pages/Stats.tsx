@@ -108,9 +108,11 @@ export default function Stats() {
       )}
 
       {/* Monthly activity */}
-      {monthlyActivity.length > 0 && (
-        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
-          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
+      <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
+        <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
+        {monthlyActivity.length === 0 ? (
+          <p className="text-xs text-zinc-600 py-4 text-center">No activity data yet</p>
+        ) : (
           <div className="flex items-end gap-1 h-20">
             {monthlyActivity.map(({ month, count }) => {
               const height = count > 0 ? Math.max((count / maxMonthCount) * 100, 8) : 0
@@ -132,8 +134,8 @@ export default function Stats() {
               )
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {totalItems === 0 && (
         <p className="text-zinc-600 text-sm text-center py-12">Nothing in your library yet — start adding some!</p>

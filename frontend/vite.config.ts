@@ -26,6 +26,10 @@ export default defineConfig({
         clientsClaim: true,
         runtimeCaching: [
           {
+            urlPattern: /\/api\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https:\/\/image\.tmdb\.org\/.*/i,
             handler: 'NetworkOnly',
           },
