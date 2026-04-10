@@ -19,15 +19,21 @@ export default function EpisodeTracker({ item }: Props) {
     queryFn: () => episodesApi.list(item.id).then((r) => r.data),
   })
 
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['episodes', item.id] })
+    qc.invalidateQueries({ queryKey: ['media', item.id] })
+    qc.invalidateQueries({ queryKey: ['stats'] })
+  }
+
   const log = useMutation({
     mutationFn: ({ season, episode }: { season: number; episode: number }) =>
       episodesApi.log(item.id, { season, episode }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['episodes', item.id] }),
+    onSuccess: invalidate,
   })
 
   const remove = useMutation({
     mutationFn: (epId: number) => episodesApi.delete(item.id, epId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['episodes', item.id] }),
+    onSuccess: invalidate,
   })
 
   if (seasons.length > 0) {
