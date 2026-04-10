@@ -318,21 +318,13 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 	if len(tvData.Seasons) > 0 {
 		meta["seasons"] = tvData.Seasons
 	}
-	// For ongoing anime (TotalEpisodes == nil), fetch the current aired count and
-	// use it to populate total_progress and the season's episode_count so that
-	// the progress bar and + button reflect reality after refresh.
+	// For ongoing anime (TotalEpisodes == nil), fetch the exact aired count and
+	// store it in total_progress only. episode_count in the season metadata stays
+	// at 0 so the UI keeps treating this as ongoing (∞ display, + always enabled).
 	if item.MediaType == models.MediaTypeAnime && tvData.TotalEpisodes == nil {
 		malID := strings.TrimPrefix(*item.ExternalID, "mal:")
 		if n := h.fetchJikanAiredCount(r.Context(), malID); n > 0 {
 			tvData.TotalEpisodes = &n
-			// Update any seasons that had an unknown count (0)
-			if sArr, ok := meta["seasons"].([]map[string]any); ok {
-				for _, s := range sArr {
-					if ec, ok := s["episode_count"].(int); ok && ec == 0 {
-						s["episode_count"] = n
-					}
-				}
-			}
 		}
 	}
 	updated, err := h.media.Update(r.Context(), id, userIDFrom(r), repository.UpdateMediaInput{
