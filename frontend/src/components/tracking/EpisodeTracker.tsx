@@ -63,7 +63,7 @@ export default function EpisodeTracker({ item }: Props) {
                   className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
                 >−</button>
                 <span className="text-sm text-zinc-300 w-20 text-center tabular-nums">
-                  {watchedCount} / {ongoing ? '∞' : s.episode_count}
+                  {watchedCount} / {ongoing ? (item.media_type === 'anime' ? '∞' : '?') : s.episode_count}
                 </span>
                 <button
                   onClick={() => log.mutate({ season: s.season_number, episode: maxEp + 1 })}
