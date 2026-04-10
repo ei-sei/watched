@@ -70,7 +70,7 @@ func (h *HealthHandler) ExternalServices(w http.ResponseWriter, r *http.Request)
 		},
 		{
 			name: "Google Books",
-			url:  fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=test&key=%s&maxResults=1", h.cfg.GoogleBooksKey),
+			url:  fmt.Sprintf("https://www.googleapis.com/books/v1/volumes/zyTCAlFPjgYC?key=%s", h.cfg.GoogleBooksKey),
 			skip: h.cfg.GoogleBooksKey == "",
 		},
 		{
