@@ -19,11 +19,14 @@ import type { MediaItem, MediaStatus } from '@/types/media'
 
 const REFRESH_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour
 
-function getLastRefresh(itemId: number): number {
-  return parseInt(localStorage.getItem(`tmdb_refresh_${itemId}`) ?? '0', 10)
+function refreshKey(item: MediaItem) {
+  return `${item.media_type}_refresh_${item.id}`
 }
-function setLastRefresh(itemId: number) {
-  localStorage.setItem(`tmdb_refresh_${itemId}`, Date.now().toString())
+function getLastRefresh(item: MediaItem): number {
+  return parseInt(localStorage.getItem(refreshKey(item)) ?? '0', 10)
+}
+function setLastRefresh(item: MediaItem) {
+  localStorage.setItem(refreshKey(item), Date.now().toString())
 }
 
 const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'dropped', 'on_hold']
@@ -49,7 +52,7 @@ export default function MediaDetail() {
   if (item === undefined) return null
   if (item === null) return <div className="text-slate-400">Not found</div>
 
-  const lastRefresh = getLastRefresh(item.id)
+  const lastRefresh = getLastRefresh(item)
   const cooldownRemaining = REFRESH_COOLDOWN_MS - (Date.now() - lastRefresh)
   const onCooldown = cooldownRemaining > 0
 
@@ -70,7 +73,7 @@ export default function MediaDetail() {
     try {
       const { data: updated } = await mediaApi.refreshFromTMDB(item.id)
       await db.mediaItems.put(updated)
-      setLastRefresh(item.id)
+      setLastRefresh(item)
       qc.invalidateQueries({ queryKey: ['stats'] })
       if (updated.total_progress === oldTotal) {
         show('No new episodes — count is up to date', 'info')

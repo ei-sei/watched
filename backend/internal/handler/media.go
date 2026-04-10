@@ -39,51 +39,38 @@ type tmdbTVData struct {
 	Seasons       []map[string]any
 }
 
-// fetchJikanAiredCount returns the exact number of episodes aired so far by
-// hitting the paginated episodes endpoint. It makes at most two requests.
+// fetchJikanAiredCount returns the number of episodes aired so far.
+// Jikan's pagination metadata (last_visible_page, has_next_page) is unreliable
+// for long-running series like One Piece — it always reports page 1 as the last
+// page even when there are 1000+ episodes. We probe pages sequentially and stop
+// when a page returns fewer than 100 items (indicating it is the last page).
 func (h *MediaHandler) fetchJikanAiredCount(ctx context.Context, malID string) int {
-	u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s/episodes?page=1", malID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return 0
+	total := 0
+	for page := 1; page <= 100; page++ {
+		u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s/episodes?page=%d", malID, page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			break
+		}
+		resp, err := h.client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			break
+		}
+		var p struct {
+			Data []struct{} `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&p) //nolint:errcheck
+		resp.Body.Close()
+		count := len(p.Data)
+		total += count
+		if count < 100 {
+			break
+		}
 	}
-	resp, err := h.client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return 0
-	}
-	defer resp.Body.Close()
-	var p1 struct {
-		Pagination struct {
-			LastVisiblePage int  `json:"last_visible_page"`
-			HasNextPage     bool `json:"has_next_page"`
-		} `json:"pagination"`
-		Data []struct{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&p1); err != nil {
-		return 0
-	}
-	if !p1.Pagination.HasNextPage {
-		return len(p1.Data)
-	}
-	// Fetch the last page to count items on it
-	lastPage := p1.Pagination.LastVisiblePage
-	u2 := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s/episodes?page=%d", malID, lastPage)
-	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, u2, nil)
-	if err != nil {
-		return 0
-	}
-	resp2, err := h.client.Do(req2)
-	if err != nil || resp2.StatusCode != http.StatusOK {
-		return 0
-	}
-	defer resp2.Body.Close()
-	var pLast struct {
-		Data []struct{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp2.Body).Decode(&pLast); err != nil {
-		return 0
-	}
-	return (lastPage-1)*100 + len(pLast.Data)
+	return total
 }
 
 func (h *MediaHandler) fetchJikanData(ctx context.Context, malID string) *tmdbTVData {
