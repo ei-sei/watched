@@ -351,6 +351,22 @@ func (h *MediaHandler) AddAnimeSeason(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	// Auto-transition status: adding a season to a completed/want_to item
+	// means the user is starting a new season — move to in_progress.
+	if updated.Status == models.StatusCompleted || updated.Status == models.StatusWantTo ||
+		updated.Status == models.StatusOnHold || updated.Status == models.StatusDropped {
+		today := time.Now().Format("2006-01-02")
+		s := models.StatusInProgress
+		upd := repository.UpdateMediaInput{Status: &s}
+		if updated.StartedAt == nil {
+			upd.StartedAt = &today
+		}
+		if final, err := h.media.Update(r.Context(), id, userIDFrom(r), upd); err == nil && final != nil {
+			updated = final
+		}
+	}
+
 	jsonOK(w, updated)
 }
 
