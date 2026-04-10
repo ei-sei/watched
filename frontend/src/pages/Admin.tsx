@@ -54,13 +54,30 @@ function ConfirmDeleteModal({ username, onConfirm, onCancel }: {
   )
 }
 
-function fmtMB(kb: number) {
-  if (kb <= 0) return null
-  const mb = kb / 1024
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`
+function fmtBytes(bytes: number) {
+  if (bytes <= 0) return '0 B'
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${Math.round(bytes / 1024)} KB`
 }
 
-function StatsCard({ s }: { s: AdminStats }) {
+function fmtKB(kb: number) {
+  return fmtBytes(kb * 1024)
+}
+
+function UsageBar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
+      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    </div>
+  )
+}
+
+function barColor(pct: number) {
+  return pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-emerald-500'
+}
+
+function OverviewCard({ s }: { s: AdminStats }) {
   const items = [
     { label: 'Users',           value: s.total_users },
     { label: 'Library items',   value: s.total_items },
@@ -68,26 +85,9 @@ function StatsCard({ s }: { s: AdminStats }) {
     { label: 'Chapters logged', value: s.total_chapters },
     { label: 'Unused invites',  value: s.unused_invites },
   ]
-
-  const memPct = s.mem_total_kb > 0 ? Math.round((s.mem_used_kb / s.mem_total_kb) * 100) : null
-  const memColor = memPct == null ? '' : memPct >= 90 ? 'bg-red-500' : memPct >= 70 ? 'bg-amber-400' : 'bg-emerald-500'
-
   return (
     <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Overview</p>
-        <div className="flex items-center gap-2">
-          {s.db_size_human && (
-            <span className="text-xs text-zinc-500" title={`${s.db_size_bytes.toLocaleString()} bytes`}>
-              {s.db_size_human}
-            </span>
-          )}
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.db_healthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-            DB {s.db_healthy ? 'healthy' : 'error'}
-          </span>
-        </div>
-      </div>
-
+      <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Overview</p>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
         {items.map(({ label, value }) => (
           <div key={label} className="space-y-0.5">
@@ -96,18 +96,48 @@ function StatsCard({ s }: { s: AdminStats }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
 
+function InfraCard({ s }: { s: AdminStats }) {
+  const dbPct = s.db_size_limit_bytes > 0
+    ? Math.round((s.db_size_bytes / s.db_size_limit_bytes) * 100)
+    : null
+
+  const memPct = s.mem_total_kb > 0
+    ? Math.round((s.mem_used_kb / s.mem_total_kb) * 100)
+    : null
+
+  return (
+    <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Infrastructure</p>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.db_healthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+          DB {s.db_healthy ? 'healthy' : 'error'}
+        </span>
+      </div>
+
+      {/* DB storage */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-zinc-500">
+          <span>Database storage</span>
+          <span>
+            {s.db_size_human}
+            {dbPct !== null && ` / ${fmtBytes(s.db_size_limit_bytes)} (${dbPct}%)`}
+          </span>
+        </div>
+        {dbPct !== null && <UsageBar pct={dbPct} color={barColor(dbPct)} />}
+      </div>
+
+      {/* Server memory */}
       {memPct !== null && (
-        <div className="space-y-1.5 pt-1">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-zinc-500">
             <span>Server memory</span>
-            <span title={`${fmtMB(s.mem_used_kb)} used of ${fmtMB(s.mem_total_kb)}`}>
-              {fmtMB(s.mem_used_kb)} / {fmtMB(s.mem_total_kb)} ({memPct}%)
-            </span>
+            <span>{fmtKB(s.mem_used_kb)} / {fmtKB(s.mem_total_kb)} ({memPct}%)</span>
           </div>
-          <div className="h-1.5 w-full bg-white/[0.06] rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${memColor}`} style={{ width: `${memPct}%` }} />
-          </div>
+          <UsageBar pct={memPct} color={barColor(memPct)} />
         </div>
       )}
     </div>
@@ -175,7 +205,8 @@ export default function Admin() {
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-semibold text-white tracking-tight">Admin</h1>
 
-      {stats.data && <StatsCard s={stats.data} />}
+      {stats.data && <OverviewCard s={stats.data} />}
+      {stats.data && <InfraCard s={stats.data} />}
 
       <div className="flex gap-1.5">
         <button className={tabClass('invites')} onClick={() => setTab('invites')}>Invite Codes</button>
