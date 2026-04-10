@@ -66,9 +66,16 @@ function StatsCard({ s }: { s: AdminStats }) {
     <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Overview</p>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.db_healthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-          DB {s.db_healthy ? 'healthy' : 'error'}
-        </span>
+        <div className="flex items-center gap-2">
+          {s.db_size_human && (
+            <span className="text-xs text-zinc-500" title={`${s.db_size_bytes.toLocaleString()} bytes`}>
+              {s.db_size_human}
+            </span>
+          )}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.db_healthy ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+            DB {s.db_healthy ? 'healthy' : 'error'}
+          </span>
+        </div>
       </div>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
         {items.map(({ label, value }) => (
