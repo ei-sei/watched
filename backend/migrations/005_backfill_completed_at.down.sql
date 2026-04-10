@@ -1,0 +1,1 @@
+-- Cannot safely undo a backfill (we don't know which values were NULL before)
