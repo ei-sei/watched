@@ -20,7 +20,14 @@ export default function Stats() {
   const ratingDist = s.rating_distribution ?? []
   const monthlyActivity = s.monthly_activity ?? []
   const maxRatingCount = Math.max(...ratingDist.map(b => b.count), 1)
-  const maxMonthCount = Math.max(...monthlyActivity.map(m => m.count), 1)
+  const maxMonthTotal = Math.max(...monthlyActivity.map(m => m.films + m.tv + m.books + m.anime), 1)
+
+  const CATEGORY_SEGMENTS = [
+    { key: 'anime' as const, colour: 'bg-pink-400',    label: 'Anime'    },
+    { key: 'books' as const, colour: 'bg-emerald-400', label: 'Books'    },
+    { key: 'tv'    as const, colour: 'bg-purple-400',  label: 'TV'       },
+    { key: 'films' as const, colour: 'bg-blue-400',    label: 'Movies'   },
+  ]
 
   const typeCards = [
     { label: 'Movies',   total: s.films.total,    detail: `${s.films.this_month} this month`,          sub: s.films.avg_rating ? `Avg ${s.films.avg_rating.toFixed(1)} / 10` : null, colour: 'text-blue-400' },
@@ -107,27 +114,44 @@ export default function Stats() {
         </div>
       )}
 
-      {/* Monthly activity */}
+      {/* Monthly activity — stacked bar chart */}
       <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
-        <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
+          <div className="flex items-center gap-3">
+            {CATEGORY_SEGMENTS.slice().reverse().map(({ key, colour, label }) => (
+              <span key={key} className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${colour}`} />
+                <span className="text-[10px] text-zinc-500">{label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
         {monthlyActivity.length === 0 ? (
           <p className="text-xs text-zinc-600 py-4 text-center">No activity data yet</p>
         ) : (
           <div className="flex items-end gap-1 h-20">
-            {monthlyActivity.map(({ month, count }) => {
-              const height = count > 0 ? Math.max((count / maxMonthCount) * 100, 8) : 0
-              const [y, m] = month.split('-')
-              const label = new Date(Number(y), Number(m) - 1).toLocaleString('default', { month: 'short' })
+            {monthlyActivity.map((m) => {
+              const total = m.films + m.tv + m.books + m.anime
+              const barPct = total > 0 ? Math.max((total / maxMonthTotal) * 100, 6) : 0
+              const [y, mo] = m.month.split('-')
+              const label = new Date(Number(y), Number(mo) - 1).toLocaleString('default', { month: 'short' })
               return (
-                <div key={month} className="flex-1 flex flex-col items-center gap-1">
-                  {count > 0 && (
-                    <span className="text-[9px] text-zinc-600 tabular-nums">{count}</span>
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                  {total > 0 && (
+                    <span className="text-[9px] text-zinc-600 tabular-nums">{total}</span>
                   )}
-                  <div className="w-full flex items-end" style={{ height: '64px' }}>
-                    <div
-                      className="w-full rounded-sm bg-indigo-500/40 transition-all"
-                      style={{ height: `${height}%` }}
-                    />
+                  <div className="w-full flex flex-col-reverse overflow-hidden rounded-sm" style={{ height: '64px' }}>
+                    {CATEGORY_SEGMENTS.map(({ key, colour }) => {
+                      const segPct = total > 0 ? (m[key] / total) * barPct : 0
+                      return segPct > 0 ? (
+                        <div
+                          key={key}
+                          className={`w-full ${colour} opacity-70 transition-all`}
+                          style={{ height: `${segPct}%` }}
+                        />
+                      ) : null
+                    })}
                   </div>
                   <span className="text-[9px] text-zinc-600">{label}</span>
                 </div>

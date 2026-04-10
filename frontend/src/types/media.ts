@@ -75,7 +75,7 @@ export interface StatsSummary {
   books:    { total: number; in_progress: number; chapters_this_month: number }
   anime:    { total: number; in_progress: number; episodes_this_month: number }
   rating_distribution: { rating: number; count: number }[]
-  monthly_activity: { month: string; count: number }[]
+  monthly_activity: { month: string; films: number; tv: number; books: number; anime: number }[]
 
   longest_streak_days: number
   current_streak_days: number
