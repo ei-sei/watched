@@ -57,6 +57,26 @@ func (r *EpisodeRepo) Upsert(ctx context.Context, mediaItemID, season, episode i
 	))
 }
 
+// BulkInsertWatched inserts episode rows 1..count for a given season,
+// all with the same watched_at timestamp. Skips any that already exist.
+func (r *EpisodeRepo) BulkInsertWatched(ctx context.Context, mediaItemID, season, count int, watchedAt *string) error {
+	if count <= 0 {
+		return nil
+	}
+	episodes := make([]int, count)
+	for i := range episodes {
+		episodes[i] = i + 1
+	}
+	_, err := r.db.Exec(ctx,
+		`INSERT INTO tv_episode_logs (media_item_id, season_number, episode_number, watched_at)
+		 SELECT $1, $2, ep, COALESCE($3::timestamptz, NOW())
+		 FROM unnest($4::int[]) AS ep
+		 ON CONFLICT (media_item_id, season_number, episode_number) DO NOTHING`,
+		mediaItemID, season, watchedAt, episodes,
+	)
+	return err
+}
+
 func (r *EpisodeRepo) Delete(ctx context.Context, id, mediaItemID int) error {
 	tag, err := r.db.Exec(ctx,
 		`DELETE FROM tv_episode_logs WHERE id = $1 AND media_item_id = $2`, id, mediaItemID)

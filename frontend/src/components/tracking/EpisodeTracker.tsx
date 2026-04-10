@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLocalEpisodes, useLogEpisode, useDeleteEpisode } from '@/hooks/useLocalEpisodes'
+import { formatDate } from '@/utils/formatters'
 import type { MediaItem, EpisodeLog } from '@/types/media'
 
 interface Season {
@@ -33,8 +34,15 @@ export default function EpisodeTracker({ item }: Props) {
             ? new Date(lastWatched).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
             : null
 
+          // Prefer dates from the media item itself (reliable for imports);
+          // fall back to the last episode log's watched_at.
+          const startLabel = item.started_at ? formatDate(item.started_at) : null
+          const endLabel = isComplete
+            ? (item.completed_at ? formatDate(item.completed_at) : dateLabel)
+            : null
+
           return (
-            <div key={s.season_number} className="flex items-center gap-2 sm:gap-3 py-1">
+            <div key={s.season_number} className="flex items-center gap-2 sm:gap-3 py-1 flex-wrap">
               <span className="text-sm text-zinc-400 w-16 sm:w-20 flex-shrink-0">S{s.season_number < 10 ? '0' + s.season_number : s.season_number}</span>
               <div className="flex items-center gap-2 bg-[#1a1a1a] rounded-md border border-white/[0.08] px-1">
                 <button
@@ -51,8 +59,12 @@ export default function EpisodeTracker({ item }: Props) {
                   className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-zinc-200 disabled:opacity-30 transition-colors text-base"
                 >+</button>
               </div>
-              {dateLabel && (
-                <span className="text-xs text-zinc-600">{dateLabel}</span>
+              {(startLabel || endLabel) && (
+                <span className="text-xs text-zinc-600">
+                  {startLabel && endLabel
+                    ? `${startLabel} → ${endLabel}`
+                    : startLabel ?? endLabel}
+                </span>
               )}
             </div>
           )

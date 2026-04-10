@@ -50,7 +50,7 @@ func main() {
 	searchH  := handler.NewSearchHandler(cfg)
 	statsH   := handler.NewStatsHandler(mediaRepo)
 	shareH   := handler.NewShareHandler(listRepo)
-	importH  := handler.NewImportHandler(mediaRepo, cfg)
+	importH  := handler.NewImportHandler(mediaRepo, episodeRepo, cfg)
 	healthH  := handler.NewHealthHandler(cfg)
 
 	r := chi.NewRouter()

@@ -19,13 +19,14 @@ import (
 )
 
 type ImportHandler struct {
-	media  *repository.MediaRepo
-	cfg    *config.Config
-	client *http.Client
+	media    *repository.MediaRepo
+	episodes *repository.EpisodeRepo
+	cfg      *config.Config
+	client   *http.Client
 }
 
-func NewImportHandler(media *repository.MediaRepo, cfg *config.Config) *ImportHandler {
-	return &ImportHandler{media: media, cfg: cfg, client: &http.Client{Timeout: 15 * time.Second}}
+func NewImportHandler(media *repository.MediaRepo, episodes *repository.EpisodeRepo, cfg *config.Config) *ImportHandler {
+	return &ImportHandler{media: media, episodes: episodes, cfg: cfg, client: &http.Client{Timeout: 15 * time.Second}}
 }
 
 // ── Shared result type ─────────────────────────────────────────────────────────
@@ -169,8 +170,24 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			_, _ = h.media.Update(ctx, created.ID, userID, repository.UpdateMediaInput{Rating: rating})
 		}
 
-		if poster == nil && created != nil {
-			toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID})
+		if created != nil {
+			// Bulk-insert episode logs so the episode tracker matches progress.
+			// Completed: all episodes watched_at = completed_at.
+			// In-progress: episodes 1..watched, watched_at = started_at.
+			switch status {
+			case models.StatusCompleted:
+				if a.Episodes > 0 {
+					_ = h.episodes.BulkInsertWatched(ctx, created.ID, 1, a.Episodes, completedAt)
+				}
+			case models.StatusInProgress:
+				if a.Watched > 0 {
+					_ = h.episodes.BulkInsertWatched(ctx, created.ID, 1, a.Watched, startedAt)
+				}
+			}
+
+			if poster == nil {
+				toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID})
+			}
 		}
 
 		result.Imported++
