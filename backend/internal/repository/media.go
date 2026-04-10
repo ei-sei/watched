@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ei-sei/brsti/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -297,16 +298,22 @@ type RatingBucket struct {
 	Count  int `json:"count"`
 }
 
+type MonthlyActivity struct {
+	Month string `json:"month"` // "2026-01"
+	Count int    `json:"count"`
+}
+
 type StatsSummary struct {
-	Films              FilmStats      `json:"films"`
-	TVShows            TVStats        `json:"tv_shows"`
-	Books              BookStats      `json:"books"`
-	Anime              AnimeStats     `json:"anime"`
-	RatingDistribution []RatingBucket `json:"rating_distribution"`
-	LongestStreakDays  int            `json:"longest_streak_days"`
-	CurrentStreakDays  int            `json:"current_streak_days"`
-	EstimatedMinutes   int            `json:"estimated_minutes"`
-	CompletionRate     float64        `json:"completion_rate"`
+	Films              FilmStats        `json:"films"`
+	TVShows            TVStats          `json:"tv_shows"`
+	Books              BookStats        `json:"books"`
+	Anime              AnimeStats       `json:"anime"`
+	RatingDistribution []RatingBucket   `json:"rating_distribution"`
+	MonthlyActivity    []MonthlyActivity `json:"monthly_activity"`
+	LongestStreakDays  int              `json:"longest_streak_days"`
+	CurrentStreakDays  int              `json:"current_streak_days"`
+	EstimatedMinutes   int              `json:"estimated_minutes"`
+	CompletionRate     float64          `json:"completion_rate"`
 }
 
 type FilmStats struct {
@@ -482,6 +489,49 @@ func (r *MediaRepo) GetSummary(ctx context.Context, userID int) (*StatsSummary, 
 	`, userID).Scan(&s.LongestStreakDays, &s.CurrentStreakDays)
 	if err != nil {
 		return nil, err
+	}
+
+	// Monthly activity — last 12 months
+	// Cast all dates to DATE so UNION ALL resolves cleanly; use TO_CHAR for month grouping
+	monthRows, err := r.db.Query(ctx, `
+		SELECT TO_CHAR(activity_date, 'YYYY-MM') AS month, COUNT(*) AS cnt
+		FROM (
+			SELECT e.watched_at::date AS activity_date
+			FROM tv_episode_logs e
+			JOIN media_items m ON m.id = e.media_item_id
+			WHERE m.user_id = $1 AND e.watched_at IS NOT NULL
+			UNION ALL
+			SELECT c.completed_at::date
+			FROM book_chapter_logs c
+			JOIN media_items m ON m.id = c.media_item_id
+			WHERE m.user_id = $1 AND c.completed_at IS NOT NULL
+			UNION ALL
+			SELECT completed_at
+			FROM media_items
+			WHERE user_id = $1 AND status = 'completed' AND completed_at IS NOT NULL
+		) acts(activity_date)
+		WHERE activity_date >= CURRENT_DATE - INTERVAL '11 months'
+		GROUP BY month
+		ORDER BY month
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer monthRows.Close()
+	activityMap := make(map[string]int)
+	for monthRows.Next() {
+		var m MonthlyActivity
+		if err := monthRows.Scan(&m.Month, &m.Count); err != nil {
+			return nil, err
+		}
+		activityMap[m.Month] = m.Count
+	}
+	// Fill all 12 months so the frontend always gets a full array
+	now := time.Now()
+	for i := 11; i >= 0; i-- {
+		t := now.AddDate(0, -i, 0)
+		key := t.Format("2006-01")
+		s.MonthlyActivity = append(s.MonthlyActivity, MonthlyActivity{Month: key, Count: activityMap[key]})
 	}
 
 	return s, nil
