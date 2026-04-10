@@ -27,6 +27,7 @@ export default function EpisodeTracker({ item }: Props) {
           const watchedCount = watched.length
           const maxEp = watched[0]?.episode_number ?? 0
           const ongoing = s.episode_count === 0
+          const ongoingSingle = ongoing && seasons.length === 1
           const canAdd = ongoing || watchedCount < s.episode_count
           const canRemove = watchedCount > 0
           const isComplete = !ongoing && watchedCount === s.episode_count
@@ -52,7 +53,9 @@ export default function EpisodeTracker({ item }: Props) {
 
           return (
             <div key={s.season_number} className="flex items-center gap-2 sm:gap-3 py-1 flex-wrap">
-              <span className="text-sm text-zinc-400 w-16 sm:w-20 flex-shrink-0">S{s.season_number < 10 ? '0' + s.season_number : s.season_number}</span>
+              {!ongoingSingle && (
+                <span className="text-sm text-zinc-400 w-16 sm:w-20 flex-shrink-0">S{s.season_number < 10 ? '0' + s.season_number : s.season_number}</span>
+              )}
               <div className="flex items-center gap-2 bg-[#1a1a1a] rounded-md border border-white/[0.08] px-1">
                 <button
                   onClick={() => watched[0] && remove.mutate(watched[0].id)}
