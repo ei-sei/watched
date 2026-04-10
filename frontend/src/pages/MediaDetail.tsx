@@ -13,7 +13,7 @@ import { formatDate } from '@/utils/formatters'
 import { mediaApi } from '@/api/media'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { STATUS_LABELS, STATUS_COLOURS } from '@/utils/constants'
-import type { MediaStatus } from '@/types/media'
+import type { MediaItem, MediaStatus } from '@/types/media'
 
 const REFRESH_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour
 
@@ -106,7 +106,13 @@ export default function MediaDetail() {
               return (
                 <button
                   key={s}
-                  onClick={() => update.mutate({ id: item.id, data: { status: s } })}
+                  onClick={() => {
+                    const today = new Date().toISOString().slice(0, 10)
+                    const extra: Partial<MediaItem> = {}
+                    if (s === 'completed' && !item.completed_at) extra.completed_at = today
+                    if (s === 'in_progress' && !item.started_at) extra.started_at = today
+                    update.mutate({ id: item.id, data: { status: s, ...extra } })
+                  }}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
                     active
                       ? colours
