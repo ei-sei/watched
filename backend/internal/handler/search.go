@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,6 +77,31 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if all == nil {
 		all = []models.SearchResult{}
 	}
+
+	// When doing an unfiltered search, TMDB TV results and Jikan anime results
+	// overlap. Deduplicate by dropping TMDB TV entries whose title matches a
+	// Jikan result — Jikan is the authoritative source for anime.
+	if mediaType == "" {
+		animeTitles := make(map[string]struct{})
+		for _, r := range all {
+			if r.Source == "jikan" {
+				animeTitles[normTitle(r.Title)] = struct{}{}
+			}
+		}
+		if len(animeTitles) > 0 {
+			filtered := all[:0]
+			for _, r := range all {
+				if r.Source == "tmdb" && r.MediaType == string(models.MediaTypeTVShow) {
+					if _, dup := animeTitles[normTitle(r.Title)]; dup {
+						continue
+					}
+				}
+				filtered = append(filtered, r)
+			}
+			all = filtered
+		}
+	}
+
 	jsonOK(w, all)
 }
 
@@ -319,4 +345,13 @@ func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.Sea
 		})
 	}
 	return out, nil
+}
+
+// normTitle lowercases and strips common punctuation for loose title matching.
+func normTitle(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, ":", "")
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.Join(strings.Fields(s), " ")
+	return s
 }
