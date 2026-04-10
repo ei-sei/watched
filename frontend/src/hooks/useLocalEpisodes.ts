@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { db } from '@/offline/db'
 import { enqueue } from '@/offline/queue'
 import { episodesApi } from '@/api/episodes'
+import { mediaApi } from '@/api/media'
 import type { EpisodeLog } from '@/types/media'
 
 export function useLocalEpisodes(mediaId: number) {
@@ -35,12 +36,9 @@ export function useLogEpisode(mediaId: number) {
         // Replace temp with real server record
         await db.episodeLogs.delete(tempId)
         await db.episodeLogs.put(ep)
-        // Keep media item progress in sync
-        const item = await db.mediaItems.get(mediaId)
-        if (item) {
-          const logged = await db.episodeLogs.where('media_item_id').equals(mediaId).count()
-          await db.mediaItems.update(mediaId, { current_progress: logged })
-        }
+        // Sync the media item from server — backend may have auto-transitioned status
+        const { data: updatedItem } = await mediaApi.get(mediaId)
+        await db.mediaItems.put(updatedItem)
         return ep
       } catch {
         await enqueue({
@@ -67,11 +65,9 @@ export function useDeleteEpisode(mediaId: number) {
 
       try {
         await episodesApi.delete(mediaId, epId)
-        const item = await db.mediaItems.get(mediaId)
-        if (item) {
-          const logged = await db.episodeLogs.where('media_item_id').equals(mediaId).count()
-          await db.mediaItems.update(mediaId, { current_progress: logged })
-        }
+        // Sync the media item from server — backend may have auto-transitioned status
+        const { data: updatedItem } = await mediaApi.get(mediaId)
+        await db.mediaItems.put(updatedItem)
       } catch {
         // If this was a temp record (negative id) nothing to DELETE on server
         if (epId > 0) {
