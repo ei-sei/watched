@@ -72,8 +72,25 @@ function ImportCard() {
   const [importing, setImporting] = useState(false)
   const [activeService, setActiveService] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<{ service: string; imported: number; skipped: number } | null>(null)
+  const [refetching, setRefetching] = useState(false)
   const rawProgress = useImportProgress(importing)
   const displayProgress = importing ? rawProgress : lastResult ? 100 : 0
+
+  const refetchPosters = async () => {
+    setRefetching(true)
+    try {
+      const { data } = await client.post('/import/posters/refetch')
+      if (data.queued === 0) {
+        show('No missing posters found', 'success')
+      } else {
+        show(`Fetching posters for ${data.queued} anime in the background`, 'success')
+      }
+    } catch {
+      show('Failed to start poster fetch', 'error')
+    } finally {
+      setRefetching(false)
+    }
+  }
 
   const handleFile = async (service: ImportService, file: File) => {
     setImporting(true)
@@ -139,6 +156,20 @@ function ImportCard() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="border-t border-white/[0.05] pt-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-zinc-300">Fetch missing posters</p>
+          <p className="text-xs text-zinc-600 mt-0.5">Re-runs poster lookup for anime imported without one.</p>
+        </div>
+        <button
+          onClick={refetchPosters}
+          disabled={refetching || importing}
+          className="flex-shrink-0 px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors disabled:opacity-40"
+        >
+          {refetching ? 'Queuing…' : 'Fetch'}
+        </button>
       </div>
 
       {/* Progress bar — shown while importing or after completion */}

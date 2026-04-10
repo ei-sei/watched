@@ -254,6 +254,39 @@ func (r *MediaRepo) DeleteAllByType(ctx context.Context, userID int, mediaType m
 	return tag.RowsAffected(), nil
 }
 
+type MissingPosterItem struct {
+	ID    int
+	MalID int
+}
+
+// GetAnimeMissingPosters returns anime items for a user that have a mal_id in
+// their metadata but no poster_url set.
+func (r *MediaRepo) GetAnimeMissingPosters(ctx context.Context, userID int) ([]MissingPosterItem, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT id, (metadata->>'mal_id')::int
+		 FROM media_items
+		 WHERE user_id = $1
+		   AND media_type = 'anime'
+		   AND poster_url IS NULL
+		   AND metadata->>'mal_id' IS NOT NULL`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get anime missing posters: %w", err)
+	}
+	defer rows.Close()
+
+	var out []MissingPosterItem
+	for rows.Next() {
+		var item MissingPosterItem
+		if err := rows.Scan(&item.ID, &item.MalID); err != nil {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 func (r *MediaRepo) SetPoster(ctx context.Context, id int, posterURL string) error {
 	_, err := r.db.Exec(ctx,
 		`UPDATE media_items SET poster_url = $2, updated_at = NOW() WHERE id = $1`, id, posterURL)
