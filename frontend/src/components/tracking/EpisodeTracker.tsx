@@ -29,16 +29,24 @@ export default function EpisodeTracker({ item }: Props) {
           const canAdd = watchedCount < s.episode_count
           const canRemove = watchedCount > 0
           const isComplete = watchedCount === s.episode_count && s.episode_count > 0
-          const lastWatched = isComplete ? watched.find((e) => e.watched_at)?.watched_at : null
-          const dateLabel = lastWatched
-            ? new Date(lastWatched).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-            : null
 
-          // Prefer dates from the media item itself (reliable for imports);
-          // fall back to the last episode log's watched_at.
-          const startLabel = item.started_at ? formatDate(item.started_at) : null
+          // Derive per-season dates from episode logs so each season is independent.
+          // For single-season items, fall back to item-level started_at/completed_at.
+          const withDates = watched.filter((e) => e.watched_at)
+          const earliestEp = withDates.reduce<EpisodeLog | null>(
+            (min, e) => (!min || e.watched_at! < min.watched_at!) ? e : min, null
+          )
+          const latestEp = withDates.reduce<EpisodeLog | null>(
+            (max, e) => (!max || e.watched_at! > max.watched_at!) ? e : max, null
+          )
+          const isSingleSeason = seasons.length === 1
+          const startLabel = earliestEp
+            ? formatDate(earliestEp.watched_at)
+            : (isSingleSeason && item.started_at ? formatDate(item.started_at) : null)
           const endLabel = isComplete
-            ? (item.completed_at ? formatDate(item.completed_at) : dateLabel)
+            ? (latestEp
+                ? formatDate(latestEp.watched_at)
+                : (isSingleSeason && item.completed_at ? formatDate(item.completed_at) : null))
             : null
 
           return (
