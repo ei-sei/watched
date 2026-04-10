@@ -72,30 +72,47 @@ function ImportCard() {
   const [importing, setImporting] = useState(false)
   const [activeService, setActiveService] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<{ service: string; imported: number; skipped: number } | null>(null)
+  const [missingCount, setMissingCount] = useState<number | null>(null)
   const [refetching, setRefetching] = useState(false)
   const [posterProgress, setPosterProgress] = useState<{ current: number; total: number } | null>(null)
+  const [allCaughtUp, setAllCaughtUp] = useState(false)
   const rawProgress = useImportProgress(importing)
   const displayProgress = importing ? rawProgress : lastResult ? 100 : 0
+
+  useEffect(() => {
+    client.get('/import/posters/missing-count')
+      .then(({ data }) => setMissingCount(data.count))
+      .catch(() => {})
+  }, [])
 
   const refetchPosters = async () => {
     setRefetching(true)
     setPosterProgress(null)
+    setAllCaughtUp(false)
     try {
       const { data } = await client.post('/import/posters/refetch')
       if (data.queued === 0) {
-        show('No missing posters found', 'success')
+        setMissingCount(0)
+        setAllCaughtUp(true)
+        setRefetching(false)
         return
       }
       const total: number = data.queued
       const msPerItem = 350
       const startedAt = Date.now()
       setPosterProgress({ current: 0, total })
-      const id = setInterval(() => {
+      const id = setInterval(async () => {
         const elapsed = Date.now() - startedAt
         const estimated = Math.min(Math.floor(elapsed / msPerItem), total)
         setPosterProgress({ current: estimated, total })
         if (estimated >= total) {
           clearInterval(id)
+          // Verify with server how many are still missing
+          try {
+            const { data: check } = await client.get('/import/posters/missing-count')
+            setMissingCount(check.count)
+            if (check.count === 0) setAllCaughtUp(true)
+          } catch { /* ignore */ }
           setRefetching(false)
         }
       }, msPerItem)
@@ -175,11 +192,19 @@ function ImportCard() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm text-zinc-300">Fetch missing posters</p>
-            <p className="text-xs text-zinc-600 mt-0.5">Re-runs poster lookup for anime imported without one.</p>
+            <p className="text-xs text-zinc-600 mt-0.5">
+              {allCaughtUp
+                ? 'All posters are up to date.'
+                : missingCount === null
+                  ? 'Re-runs poster lookup for anime imported without one.'
+                  : missingCount === 0
+                    ? 'All posters are up to date.'
+                    : `${missingCount} anime ${missingCount === 1 ? 'is' : 'are'} missing a poster.`}
+            </p>
           </div>
           <button
             onClick={refetchPosters}
-            disabled={refetching || importing}
+            disabled={refetching || importing || allCaughtUp || missingCount === 0}
             className="flex-shrink-0 px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors disabled:opacity-40"
           >
             {refetching ? 'Fetching…' : 'Fetch'}
@@ -196,7 +221,7 @@ function ImportCard() {
             <p className="text-xs text-zinc-500">
               {posterProgress.current < posterProgress.total
                 ? `${posterProgress.current} / ${posterProgress.total} posters fetched…`
-                : `Done — ${posterProgress.total} posters fetched`}
+                : `Done — fetched ${posterProgress.total} posters`}
             </p>
           </div>
         )}

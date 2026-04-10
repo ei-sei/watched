@@ -141,6 +141,7 @@ func main() {
 		r.Post("/import/mal", importH.ImportMAL)
 		r.Post("/import/letterboxd", importH.ImportLetterboxd)
 		r.Post("/import/goodreads", importH.ImportGoodreads)
+		r.Get("/import/posters/missing-count", importH.MissingPosterCount)
 		r.Post("/import/posters/refetch", importH.RefetchPosters)
 
 		// Admin
