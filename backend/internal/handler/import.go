@@ -126,6 +126,25 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			totalProgress = &a.Episodes
 		}
 
+		startedAt := malDate(a.Start)
+		completedAt := malDate(a.Finish)
+
+		// Build the same seasons structure that AddAnimeSeason produces so
+		// TVSeasonProgress and AnimeSeasonManager behave identically.
+		metadata := map[string]any{
+			"mal_id":   a.ID,
+			"episodes": a.Episodes,
+		}
+		if a.Episodes > 0 {
+			metadata["seasons"] = []map[string]any{
+				{
+					"season_number": 1,
+					"episode_count": a.Episodes,
+					"mal_id":        a.ID,
+				},
+			}
+		}
+
 		in := repository.CreateMediaInput{
 			UserID:          userID,
 			MediaType:       models.MediaTypeAnime,
@@ -133,9 +152,11 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			Title:           a.Title,
 			PosterURL:       poster,
 			Status:          status,
-			Metadata:        map[string]any{"mal_id": a.ID, "episodes": a.Episodes},
+			Metadata:        metadata,
 			CurrentProgress: currentProgress,
 			TotalProgress:   totalProgress,
+			StartedAt:       startedAt,
+			CompletedAt:     completedAt,
 		}
 
 		created, err := h.media.Create(ctx, in)
@@ -156,6 +177,15 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 	}
 
 	return result, toEnrich
+}
+
+// malDate parses a MAL date string (YYYY-MM-DD). Returns nil if unset or zero.
+func malDate(s string) *string {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0000-00-00" {
+		return nil
+	}
+	return &s
 }
 
 // ── Jikan poster enrichment ────────────────────────────────────────────────────

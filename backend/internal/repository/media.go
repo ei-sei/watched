@@ -175,6 +175,8 @@ type CreateMediaInput struct {
 	Status          models.MediaStatus
 	CurrentProgress *int
 	TotalProgress   *int
+	StartedAt       *string // DATE yyyy-mm-dd
+	CompletedAt     *string // DATE yyyy-mm-dd
 }
 
 func (r *MediaRepo) Create(ctx context.Context, in CreateMediaInput) (*models.MediaItem, error) {
@@ -182,11 +184,11 @@ func (r *MediaRepo) Create(ctx context.Context, in CreateMediaInput) (*models.Me
 		in.Metadata = map[string]any{}
 	}
 	return scanMedia(r.db.QueryRow(ctx,
-		`INSERT INTO media_items (user_id, media_type, external_id, title, year, poster_url, metadata, status, current_progress, total_progress)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`INSERT INTO media_items (user_id, media_type, external_id, title, year, poster_url, metadata, status, current_progress, total_progress, started_at, completed_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 RETURNING `+mediaColumns,
 		in.UserID, in.MediaType, in.ExternalID, in.Title, in.Year, in.PosterURL, in.Metadata, in.Status,
-		in.CurrentProgress, in.TotalProgress,
+		in.CurrentProgress, in.TotalProgress, in.StartedAt, in.CompletedAt,
 	))
 }
 
