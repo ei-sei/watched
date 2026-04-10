@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"bufio"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/ei-sei/brsti/internal/auth"
 	"github.com/ei-sei/brsti/internal/config"
@@ -203,6 +206,41 @@ func (h *UserHandler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// readMemInfo parses /proc/meminfo and returns MemTotal, MemAvailable in kB.
+// Returns zeros silently if the file is unavailable (non-Linux hosts).
+func readMemInfo() (totalKB, availableKB int64) {
+	f, err := os.Open("/proc/meminfo")
+	if err != nil {
+		return 0, 0
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		var key string
+		var val int64
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		key = strings.TrimSuffix(fields[0], ":")
+		val, err = strconv.ParseInt(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		switch key {
+		case "MemTotal":
+			totalKB = val
+		case "MemAvailable":
+			availableKB = val
+		}
+		if totalKB > 0 && availableKB > 0 {
+			break
+		}
+	}
+	return totalKB, availableKB
+}
+
 // GET /admin/stats
 func (h *UserHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.users.GetAdminStats(r.Context())
@@ -210,6 +248,8 @@ func (h *UserHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	stats.MemTotalKB, stats.MemAvailableKB = readMemInfo()
+	stats.MemUsedKB = stats.MemTotalKB - stats.MemAvailableKB
 	jsonOK(w, stats)
 }
 

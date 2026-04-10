@@ -25,6 +25,9 @@ export interface AdminStats {
   db_size_bytes: number
   db_size_human: string
   db_healthy: boolean
+  mem_total_kb: number
+  mem_used_kb: number
+  mem_available_kb: number
 }
 
 export const adminApi = {
