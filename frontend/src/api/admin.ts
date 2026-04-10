@@ -29,6 +29,8 @@ export interface AdminStats {
   mem_total_kb: number
   mem_used_kb: number
   mem_available_kb: number
+  disk_total_bytes: number
+  disk_used_bytes: number
 }
 
 export interface ServiceStatus {
