@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi, type AdminStats } from '@/api/admin'
+import { adminApi, type AdminStats, type ServiceStatus } from '@/api/admin'
 import { useToast } from '@/components/ui/Toast'
 import { Copy, RefreshCw, Trash2 } from 'lucide-react'
 
@@ -144,6 +144,34 @@ function InfraCard({ s }: { s: AdminStats }) {
   )
 }
 
+function ServicesCard({ services, loading }: { services: ServiceStatus[] | undefined; loading: boolean }) {
+  return (
+    <div className="bg-[#1a1a1a] rounded-lg p-4 ring-1 ring-white/[0.06] space-y-3">
+      <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">External APIs</p>
+      {loading ? (
+        <p className="text-xs text-zinc-600">Checking…</p>
+      ) : !services ? (
+        <p className="text-xs text-zinc-600">Failed to load</p>
+      ) : (
+        <div className="space-y-2">
+          {services.map((s) => (
+            <div key={s.name} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${s.ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                <span className="text-sm text-zinc-300">{s.name}</span>
+                {s.error && <span className="text-xs text-zinc-600">({s.error})</span>}
+              </div>
+              <span className="text-xs text-zinc-600 tabular-nums">
+                {s.ok ? `${s.latency_ms} ms` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('invites')
   const [newCode, setNewCode] = useState(randomCode)
@@ -152,6 +180,7 @@ export default function Admin() {
   const qc = useQueryClient()
 
   const stats   = useQuery({ queryKey: ['admin', 'stats'],   queryFn: () => adminApi.getStats().then(r => r.data) })
+  const health  = useQuery({ queryKey: ['admin', 'health'],  queryFn: () => adminApi.getHealth().then(r => r.data), staleTime: 30_000 })
   const invites = useQuery({ queryKey: ['admin', 'invites'], queryFn: () => adminApi.listInvites().then(r => r.data) })
   const users   = useQuery({ queryKey: ['admin', 'users'],   queryFn: () => adminApi.listUsers().then(r => r.data), enabled: tab === 'users' })
 
@@ -207,6 +236,7 @@ export default function Admin() {
 
       {stats.data && <OverviewCard s={stats.data} />}
       {stats.data && <InfraCard s={stats.data} />}
+      <ServicesCard services={health.data} loading={health.isLoading} />
 
       <div className="flex gap-1.5">
         <button className={tabClass('invites')} onClick={() => setTab('invites')}>Invite Codes</button>

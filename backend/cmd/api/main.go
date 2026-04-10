@@ -47,10 +47,11 @@ func main() {
 	userH   := handler.NewUserHandler(userRepo, mediaRepo, cfg)
 	mediaH  := handler.NewMediaHandler(mediaRepo, episodeRepo, chapterRepo, cfg.TMDBKey)
 	listH   := handler.NewListHandler(listRepo, mediaRepo)
-	searchH := handler.NewSearchHandler(cfg)
-	statsH  := handler.NewStatsHandler(mediaRepo)
-	shareH  := handler.NewShareHandler(listRepo)
-	importH := handler.NewImportHandler(mediaRepo, cfg)
+	searchH  := handler.NewSearchHandler(cfg)
+	statsH   := handler.NewStatsHandler(mediaRepo)
+	shareH   := handler.NewShareHandler(listRepo)
+	importH  := handler.NewImportHandler(mediaRepo, cfg)
+	healthH  := handler.NewHealthHandler(cfg)
 
 	r := chi.NewRouter()
 
@@ -146,6 +147,7 @@ func main() {
 			r.Patch("/admin/users/{id}/flags", userH.AdminUpdateFlags)
 			r.Delete("/admin/users/{id}", userH.AdminDeleteUser)
 			r.Get("/admin/stats", userH.AdminStats)
+			r.Get("/admin/health", healthH.ExternalServices)
 			r.Get("/admin/invites", userH.AdminListInvites)
 			r.Post("/admin/invites", userH.AdminCreateInvite)
 			r.Delete("/admin/invites/{code}", userH.AdminDeleteInvite)

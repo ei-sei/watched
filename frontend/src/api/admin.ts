@@ -31,8 +31,16 @@ export interface AdminStats {
   mem_available_kb: number
 }
 
+export interface ServiceStatus {
+  name: string
+  ok: boolean
+  latency_ms: number
+  error?: string
+}
+
 export const adminApi = {
   getStats: () => client.get<AdminStats>('/admin/stats'),
+  getHealth: () => client.get<ServiceStatus[]>('/admin/health'),
   listUsers: () => client.get<AdminUser[]>('/admin/users'),
   updateFlags: (id: number, flags: { is_admin?: boolean; is_premium?: boolean }) =>
     client.patch<AdminUser>(`/admin/users/${id}/flags`, flags),
