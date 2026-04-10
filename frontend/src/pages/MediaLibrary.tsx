@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useMediaList } from '@/hooks/useMedia'
+import { useLocalMediaList } from '@/hooks/useLocalMedia'
 import MediaGrid from '@/components/media/MediaGrid'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import EmptyState from '@/components/ui/EmptyState'
 import type { MediaType, MediaStatus } from '@/types/media'
 import { MEDIA_TYPE_LABELS } from '@/utils/constants'
@@ -29,7 +28,7 @@ export default function MediaLibrary({ type }: Props) {
     return () => clearTimeout(t)
   }, [search])
 
-  const { data, isLoading } = useMediaList({
+  const data = useLocalMediaList({
     media_type: type,
     status: status || undefined,
     sort,
@@ -86,12 +85,11 @@ export default function MediaLibrary({ type }: Props) {
         </select>
       </div>
 
-      {/* Content */}
-      {isLoading && <LoadingSpinner />}
-      {!isLoading && data?.items.length === 0 && (
+      {/* Content — data is undefined only on the very first Dexie tick, then resolves instantly */}
+      {data && data.items.length === 0 && (
         <EmptyState message={search ? `No results for "${search}"` : `No ${MEDIA_TYPE_LABELS[type].toLowerCase()} yet`} />
       )}
-      {!isLoading && data && data.items.length > 0 && (
+      {data && data.items.length > 0 && (
         <>
           <MediaGrid items={data.items} />
           {data.pages > 1 && (

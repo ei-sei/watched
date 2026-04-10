@@ -6,6 +6,7 @@ import { AuthContext, useAuth, type AuthContextValue } from '@/hooks/useAuth'
 import { ToastProvider } from '@/components/ui/Toast'
 import { authApi } from '@/api/auth'
 import { storage } from '@/platform/storage'
+import { syncMedia, registerSyncOnReconnect } from '@/offline/sync'
 
 import Layout from '@/components/layout/Layout'
 import Login from '@/pages/Login'
@@ -26,6 +27,9 @@ const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
 })
 
+// Register once at module level — idempotent
+registerSyncOnReconnect()
+
 function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -33,7 +37,11 @@ function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timeout = setTimeout(() => setIsLoading(false), 5000)
     authApi.me()
-      .then((r) => setUser(r.data))
+      .then((r) => {
+        setUser(r.data)
+        // Kick off background sync as soon as we know the user is authenticated
+        syncMedia().catch(console.error)
+      })
       .catch(() => setUser(null))
       .finally(() => { clearTimeout(timeout); setIsLoading(false) })
   }, [])
@@ -43,6 +51,8 @@ function AuthProvider({ children }: { children: ReactNode }) {
     await storage.set('access_token', data.access_token)
     const { data: me } = await authApi.me()
     setUser(me)
+    // Sync after login so library is available immediately
+    syncMedia().catch(console.error)
   }
 
   const logout = async () => {

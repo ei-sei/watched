@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { useMediaItem, useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
+import { useLocalMediaItem } from '@/hooks/useLocalMedia'
+import { useUpdateMedia, useDeleteMedia } from '@/hooks/useMedia'
+import { syncItemDetail } from '@/offline/sync'
 import EpisodeTracker from '@/components/tracking/EpisodeTracker'
 import AnimeSeasonManager from '@/components/tracking/AnimeSeasonManager'
 import ChapterTracker from '@/components/tracking/ChapterTracker'
 import ProgressTracker from '@/components/tracking/ProgressTracker'
 import TVSeasonProgress from '@/components/tracking/TVSeasonProgress'
-import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
 import { mediaApi } from '@/api/media'
@@ -27,18 +28,25 @@ function setLastRefresh(itemId: number) {
 const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'dropped', 'on_hold']
 
 export default function MediaDetail() {
-
   const { id } = useParams<{ id: string }>()
+  const mediaId = Number(id)
   const navigate = useNavigate()
-  const { data: item, isLoading } = useMediaItem(Number(id))
+  // useLiveQuery resolves synchronously from IndexedDB — no network spinner
+  const item = useLocalMediaItem(mediaId)
   const update = useUpdateMedia()
   const remove = useDeleteMedia()
   const qc = useQueryClient()
   const { show } = useToast()
   const [refreshing, setRefreshing] = useState(false)
 
-  if (isLoading) return <LoadingSpinner />
-  if (!item) return <div className="text-slate-400">Not found</div>
+  // Pull fresh episodes/chapters for this item in the background
+  useEffect(() => {
+    if (mediaId > 0) syncItemDetail(mediaId).catch(console.error)
+  }, [mediaId])
+
+  // item is undefined only for the one Dexie initialisation tick — treat as loading
+  if (item === undefined) return null
+  if (item === null) return <div className="text-slate-400">Not found</div>
 
   const lastRefresh = getLastRefresh(item.id)
   const cooldownRemaining = REFRESH_COOLDOWN_MS - (Date.now() - lastRefresh)
@@ -61,7 +69,7 @@ export default function MediaDetail() {
     try {
       const { data: updated } = await mediaApi.refreshFromTMDB(item.id)
       setLastRefresh(item.id)
-      qc.invalidateQueries({ queryKey: ['media', item.id] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
       if (updated.total_progress === oldTotal) {
         show('No new episodes — count is up to date', 'info')
       } else {

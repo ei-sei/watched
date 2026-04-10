@@ -1,5 +1,9 @@
 import { db, type MutationQueueItem } from './db'
 
+export async function enqueue(item: Omit<MutationQueueItem, 'id'>): Promise<number> {
+  return db.mutationQueue.add(item)
+}
+
 export async function dequeue(id: number): Promise<void> {
   await db.mutationQueue.delete(id)
 }
