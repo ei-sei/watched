@@ -551,3 +551,24 @@ func (r *MediaRepo) GetSummary(ctx context.Context, userID int) (*StatsSummary, 
 
 	return s, nil
 }
+
+// AutoMarkInactive moves in_progress items to on_hold when no activity for 30+ days.
+// Only applies to items that have at least one episode/chapter logged.
+func (r *MediaRepo) AutoMarkInactive(ctx context.Context) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE media_items
+		SET status = 'on_hold', updated_at = NOW()
+		WHERE status = 'in_progress'
+		  AND media_type IN ('tv_show', 'anime', 'book')
+		  AND (
+		    (media_type IN ('tv_show', 'anime')
+		     AND EXISTS (SELECT 1 FROM tv_episode_logs WHERE media_item_id = media_items.id AND watched_at IS NOT NULL)
+		     AND (SELECT MAX(watched_at) FROM tv_episode_logs WHERE media_item_id = media_items.id) < NOW() - INTERVAL '30 days')
+		    OR
+		    (media_type = 'book'
+		     AND EXISTS (SELECT 1 FROM book_chapter_logs WHERE media_item_id = media_items.id AND completed_at IS NOT NULL)
+		     AND (SELECT MAX(completed_at) FROM book_chapter_logs WHERE media_item_id = media_items.id) < NOW() - INTERVAL '30 days')
+		  )
+	`)
+	return err
+}
