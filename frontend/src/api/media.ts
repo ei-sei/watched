@@ -10,4 +10,6 @@ export const mediaApi = {
   update: (id: number, data: Partial<MediaItem>) => client.patch<MediaItem>(`/media/${id}`, data),
   delete: (id: number) => client.delete(`/media/${id}`),
   refreshFromTMDB: (id: number) => client.post<MediaItem>(`/media/${id}/refresh`),
+  setSeasonProgress: (id: number, season: number, count: number) =>
+    client.put(`/media/${id}/episodes/progress`, { season, count }),
 }
