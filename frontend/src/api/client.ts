@@ -38,11 +38,17 @@ client.interceptors.response.use(
         refreshQueue = []
         original.headers.Authorization = `Bearer ${data.access_token}`
         return client(original)
-      } catch {
-        refreshQueue = []
-        await storage.remove('access_token')
-        await client.post('/auth/logout').catch(() => {})
-        window.location.replace('/login')
+      } catch (refreshErr: any) {
+        // Only force logout on actual auth failures — not network errors or server blips
+        const status = refreshErr?.response?.status
+        if (status === 401 || status === 403) {
+          refreshQueue = []
+          await storage.remove('access_token')
+          await client.post('/auth/logout').catch(() => {})
+          window.location.replace('/login')
+        } else {
+          refreshQueue = []
+        }
       } finally {
         isRefreshing = false
       }
