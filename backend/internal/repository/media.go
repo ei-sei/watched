@@ -245,6 +245,21 @@ func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaIn
 	return scanMedia(r.db.QueryRow(ctx, query, args...))
 }
 
+func (r *MediaRepo) DeleteAllByType(ctx context.Context, userID int, mediaType models.MediaType) (int64, error) {
+	tag, err := r.db.Exec(ctx,
+		`DELETE FROM media_items WHERE user_id = $1 AND media_type = $2`, userID, mediaType)
+	if err != nil {
+		return 0, fmt.Errorf("delete all by type: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *MediaRepo) SetPoster(ctx context.Context, id int, posterURL string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE media_items SET poster_url = $2, updated_at = NOW() WHERE id = $1`, id, posterURL)
+	return err
+}
+
 func (r *MediaRepo) Delete(ctx context.Context, id, userID int) error {
 	tag, err := r.db.Exec(ctx,
 		`DELETE FROM media_items WHERE id = $1 AND user_id = $2`, id, userID)
