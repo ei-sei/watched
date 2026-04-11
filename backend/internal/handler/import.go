@@ -211,31 +211,82 @@ type enrichItem struct {
 	malID int
 }
 
-func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
-	url := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d", malID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// anilistPoster fetches a cover image URL from AniList using the MAL ID.
+// AniList has a higher rate limit (90 req/min) and is more reliable than Jikan for poster bulk-fetches.
+func (h *ImportHandler) anilistPoster(ctx context.Context, malID int) *string {
+	body := fmt.Sprintf(
+		`{"query":"query($id:Int){Media(idMal:$id,type:ANIME){coverImage{large}}}","variables":{"id":%d}}`,
+		malID,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(body))
 	if err != nil {
 		return nil
 	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		return nil
 	}
 	defer resp.Body.Close()
-
-	var raw struct {
+	var result struct {
 		Data struct {
-			Images struct {
-				JPG struct {
-					LargeImageURL *string `json:"large_image_url"`
-				} `json:"jpg"`
-			} `json:"images"`
+			Media struct {
+				CoverImage struct {
+					Large *string `json:"large"`
+				} `json:"coverImage"`
+			} `json:"Media"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil
 	}
-	return raw.Data.Images.JPG.LargeImageURL
+	return result.Data.Media.CoverImage.Large
+}
+
+// jikanPoster fetches a cover image URL from Jikan, retrying once on 429.
+func (h *ImportHandler) jikanPoster(ctx context.Context, malID int) *string {
+	url := fmt.Sprintf("https://api.jikan.moe/v4/anime/%d", malID)
+	for attempt := 0; attempt < 2; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil
+		}
+		resp, err := h.client.Do(req)
+		if err != nil {
+			return nil
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close()
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil
+		}
+		defer resp.Body.Close()
+		var raw struct {
+			Data struct {
+				Images struct {
+					JPG struct {
+						LargeImageURL *string `json:"large_image_url"`
+						ImageURL      *string `json:"image_url"`
+					} `json:"jpg"`
+				} `json:"images"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+			return nil
+		}
+		if raw.Data.Images.JPG.LargeImageURL != nil {
+			return raw.Data.Images.JPG.LargeImageURL
+		}
+		return raw.Data.Images.JPG.ImageURL
+	}
+	return nil
 }
 
 // GET /import/posters/missing-count
@@ -274,13 +325,17 @@ func (h *ImportHandler) RefetchPosters(w http.ResponseWriter, r *http.Request) {
 }
 
 // enrichPosters runs in a background goroutine after the response is sent.
+// Tries AniList first (higher rate limit), falls back to Jikan.
 func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
 	for _, item := range items {
-		poster := h.jikanPoster(ctx, item.malID)
+		poster := h.anilistPoster(ctx, item.malID)
+		if poster == nil {
+			poster = h.jikanPoster(ctx, item.malID)
+		}
 		if poster != nil {
 			_ = h.media.SetPoster(ctx, item.id, *poster)
 		}
-		time.Sleep(350 * time.Millisecond)
+		time.Sleep(700 * time.Millisecond)
 	}
 }
 
