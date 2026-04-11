@@ -18,12 +18,7 @@ export default function MediaLibrary({ type }: Props) {
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
   // Sync from server on each category visit (no-op if synced recently)
-  // Also reset filters so each category always opens on "In Progress"
-  useEffect(() => {
-    syncMediaIfStale()
-    setStatus('in_progress')
-    setPage(1)
-  }, [type])
+  useEffect(() => { syncMediaIfStale() }, [type])
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
