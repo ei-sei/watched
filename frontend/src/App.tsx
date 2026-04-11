@@ -16,6 +16,7 @@ import MediaLibrary from '@/pages/MediaLibrary'
 import MediaDetail from '@/pages/MediaDetail'
 import Search from '@/pages/Search'
 import Stats from '@/pages/Stats'
+import Trending from '@/pages/Trending'
 import Settings from '@/pages/Settings'
 import Admin from '@/pages/Admin'
 import SharedList from '@/pages/SharedList'
@@ -151,6 +152,7 @@ export default function App() {
                 <Route path="anime/:id" element={<MediaDetail />} />
                 <Route path="search" element={<Search />} />
                 <Route path="stats" element={<Stats />} />
+                <Route path="trending" element={<Trending />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="admin" element={<Admin />} />
               </Route>
