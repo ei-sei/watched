@@ -16,8 +16,8 @@ export default function MediaCard({ item }: Props) {
 
   return (
     <>
-      <Link to={`/${ROUTE[item.media_type]}/${item.id}`} className="group block">
-        <div className="rounded-lg bg-[#1a1a1a] hover:bg-[#202020] transition-colors ring-1 ring-white/[0.06] hover:ring-white/[0.12]">
+      <Link to={`/${ROUTE[item.media_type]}/${item.id}`} className="group block h-full">
+        <div className="h-full flex flex-col rounded-lg bg-[#1a1a1a] hover:bg-[#202020] transition-colors ring-1 ring-white/[0.06] hover:ring-white/[0.12]">
           <div className="aspect-[2/3] bg-[#222222] relative overflow-hidden rounded-t-lg">
             {item.poster_url ? (
               <img
@@ -34,7 +34,7 @@ export default function MediaCard({ item }: Props) {
           </div>
           <div className="px-2.5 py-2 space-y-1.5">
             <p className="text-xs font-medium text-zinc-200 truncate leading-snug">{item.title}</p>
-            <div className="flex items-center gap-1.5 pt-0.5">
+            <div className="flex items-center gap-1.5 h-5">
               {/* Mobile: tap badge opens sheet; desktop: badge is decorative */}
               <button
                 className="md:hidden"
