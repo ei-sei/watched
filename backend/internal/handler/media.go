@@ -84,6 +84,46 @@ func (h *MediaHandler) fetchAiredCount(ctx context.Context, malID string) int {
 	return 0
 }
 
+// fetchAnimeData tries AniList first, falls back to Jikan.
+func (h *MediaHandler) fetchAnimeData(ctx context.Context, malID string) *tmdbTVData {
+	if data := h.fetchAniListData(ctx, malID); data != nil {
+		return data
+	}
+	return h.fetchJikanData(ctx, malID)
+}
+
+func (h *MediaHandler) fetchAniListData(ctx context.Context, malID string) *tmdbTVData {
+	body := fmt.Sprintf(`{"query":"query($id:Int){Media(idMal:$id,type:ANIME){episodes}}","variables":{"id":%s}}`, malID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		Data struct {
+			Media *struct {
+				Episodes *int `json:"episodes"`
+			} `json:"Media"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || raw.Data.Media == nil {
+		return nil
+	}
+	episodeCount := 0
+	if raw.Data.Media.Episodes != nil && *raw.Data.Media.Episodes > 0 {
+		episodeCount = *raw.Data.Media.Episodes
+	}
+	return &tmdbTVData{
+		TotalEpisodes: raw.Data.Media.Episodes,
+		Seasons:       []map[string]any{{"season_number": 1, "episode_count": episodeCount}},
+	}
+}
+
 func (h *MediaHandler) fetchJikanData(ctx context.Context, malID string) *tmdbTVData {
 	u := fmt.Sprintf("https://api.jikan.moe/v4/anime/%s", malID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -233,7 +273,7 @@ func (h *MediaHandler) Create(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if body.MediaType == models.MediaTypeAnime {
 			if malID, ok := parseMalID(*body.ExternalID); ok {
-				externalData = h.fetchJikanData(r.Context(), malID)
+				externalData = h.fetchAnimeData(r.Context(), malID)
 			}
 		}
 		if externalData != nil {
@@ -313,7 +353,7 @@ func (h *MediaHandler) RefreshFromTMDB(w http.ResponseWriter, r *http.Request) {
 			jsonErr(w, http.StatusBadRequest, "not a MAL item")
 			return
 		}
-		tvData = h.fetchJikanData(r.Context(), malID)
+		tvData = h.fetchAnimeData(r.Context(), malID)
 	} else {
 		jsonErr(w, http.StatusBadRequest, "only tv shows and anime can be refreshed")
 		return
