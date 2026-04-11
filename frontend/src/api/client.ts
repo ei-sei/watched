@@ -61,6 +61,18 @@ client.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config
+
+    // If the refresh endpoint itself returns 401, the session is gone.
+    // Don't attempt another refresh — just clear the token and redirect.
+    if (original.url?.includes('/auth/refresh') && error.response?.status === 401) {
+      refreshQueue.forEach((cb) => cb(''))
+      refreshQueue = []
+      isRefreshing = false
+      await storage.remove('access_token')
+      window.location.replace('/login')
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       if (isRefreshing) {
