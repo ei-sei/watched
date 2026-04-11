@@ -1,6 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Film, Tv, BookOpen, Sparkles, Search, BarChart2, Settings, LogOut, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import SyncIndicator from '@/components/ui/SyncIndicator'
+import { VERSION } from '@/version'
 
 const PRIMARY_NAV = [
   { to: '/films',  label: 'Movies',   icon: Film },
@@ -60,6 +62,10 @@ export default function Sidebar() {
 
       {/* Bottom */}
       <div className="px-2 pb-3 space-y-px">
+        <div className="flex items-center justify-between px-3 py-1.5">
+          <span className="text-[10px] text-zinc-700 select-none">v{VERSION}</span>
+          <SyncIndicator />
+        </div>
         <div className="border-t border-white/[0.06] mb-2" />
         {user?.is_admin && (
           <NavLink to="/admin" className={linkClass}>
