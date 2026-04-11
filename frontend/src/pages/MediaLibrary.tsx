@@ -16,10 +16,11 @@ export default function MediaLibrary({ type }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
   const validStatuses: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'completed', 'on_hold', 'dropped']
   const paramStatus = searchParams.get('status') ?? 'in_progress'
-  const status: MediaStatus | '' = validStatuses.includes(paramStatus as MediaStatus | '') ? paramStatus as MediaStatus | '' : 'in_progress'
+  // 'all' in URL maps to '' (no filter), anything invalid defaults to 'in_progress'
+  const status: MediaStatus | '' = paramStatus === 'all' ? '' : validStatuses.includes(paramStatus as MediaStatus | '') ? paramStatus as MediaStatus | '' : 'in_progress'
 
   const setStatus = (value: MediaStatus | '') => {
-    setSearchParams(value ? { status: value } : {}, { replace: true })
+    setSearchParams({ status: value === '' ? 'all' : value }, { replace: true })
   }
 
   const [statusOpen, setStatusOpen] = useState(false)
