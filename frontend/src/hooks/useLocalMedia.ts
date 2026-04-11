@@ -35,14 +35,18 @@ export function useLocalMediaList(params: MediaListParams) {
       return asc ? (gt ? 1 : -1) : (gt ? -1 : 1)
     })
 
-    // Paginate
-    const page = params.page ?? 1
-    const perPage = params.per_page ?? 50
     const total = items.length
-    const pages = Math.max(1, Math.ceil(total / perPage))
-    const sliced = items.slice((page - 1) * perPage, page * perPage)
 
-    return { items: sliced, total, page, per_page: perPage, pages }
+    // Paginate only when explicitly requested (Dashboard uses per_page: 8)
+    if (params.per_page) {
+      const page = params.page ?? 1
+      const perPage = params.per_page
+      const pages = Math.max(1, Math.ceil(total / perPage))
+      const sliced = items.slice((page - 1) * perPage, page * perPage)
+      return { items: sliced, total, page, per_page: perPage, pages }
+    }
+
+    return { items, total, page: 1, per_page: total, pages: 1 }
   }, [params.media_type, params.status, params.q, params.sort, params.order, params.page, params.per_page])
 }
 

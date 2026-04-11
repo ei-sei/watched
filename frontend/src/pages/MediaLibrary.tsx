@@ -26,7 +26,6 @@ export default function MediaLibrary({ type }: Props) {
   const [statusOpen, setStatusOpen] = useState(false)
   const [sort, setSort] = useState('created_at')
   const statusRef = useRef<HTMLDivElement>(null)
-  const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
@@ -45,7 +44,7 @@ export default function MediaLibrary({ type }: Props) {
   }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 350)
+    const t = setTimeout(() => { setDebouncedSearch(search) }, 350)
     return () => clearTimeout(t)
   }, [search])
 
@@ -54,8 +53,6 @@ export default function MediaLibrary({ type }: Props) {
     status: status || undefined,
     sort,
     order: 'desc',
-    page,
-    per_page: 50,
     q: debouncedSearch || undefined,
   })
 
@@ -98,7 +95,7 @@ export default function MediaLibrary({ type }: Props) {
                 return (
                   <button
                     key={value}
-                    onClick={() => { setStatus(value); setPage(1); setStatusOpen(false) }}
+                    onClick={() => { setStatus(value); setStatusOpen(false) }}
                     className={`w-full text-left px-3 py-2 text-xs transition-colors ${
                       status === value
                         ? 'text-white bg-white/10'
@@ -121,7 +118,7 @@ export default function MediaLibrary({ type }: Props) {
             return (
               <button
                 key={value}
-                onClick={() => { setStatus(value); setPage(1) }}
+                onClick={() => setStatus(value)}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                   status === value
                     ? 'bg-white/10 text-white'
@@ -151,26 +148,7 @@ export default function MediaLibrary({ type }: Props) {
         <EmptyState message={search ? `No results for "${search}"` : `No ${MEDIA_TYPE_LABELS[type].toLowerCase()} yet`} />
       )}
       {data && data.items.length > 0 && (
-        <>
-          <MediaGrid items={data.items} />
-          {data.pages > 1 && (
-            <div className="flex justify-center gap-1.5 pt-4">
-              {Array.from({ length: data.pages }, (_, i) => i + 1).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`w-8 h-8 rounded-md text-xs font-medium transition-colors ${
-                    p === page
-                      ? 'bg-white/10 text-white'
-                      : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
+        <MediaGrid items={data.items} />
       )}
     </div>
   )
