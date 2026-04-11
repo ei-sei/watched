@@ -31,13 +31,17 @@ client.interceptors.request.use(async (config) => {
   if (token && tokenExpiresAt(token) - Date.now() < 5 * 60 * 1000) {
     if (!isRefreshing) {
       isRefreshing = true
+      const oldToken = token
       try {
         token = await doRefresh()
         refreshQueue.forEach((cb) => cb(token!))
         refreshQueue = []
       } catch {
-        // Refresh failed — let the request go out with the old token;
-        // the 401 interceptor below will handle it
+        // Refresh failed — proceed with the old token for this request and
+        // any queued requests. Without resolving the queue, queued requests
+        // (including logout) would hang forever.
+        refreshQueue.forEach((cb) => cb(oldToken))
+        refreshQueue = []
       } finally {
         isRefreshing = false
       }
