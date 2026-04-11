@@ -193,6 +193,7 @@ func (r *MediaRepo) Create(ctx context.Context, in CreateMediaInput) (*models.Me
 }
 
 type UpdateMediaInput struct {
+	Title           *string
 	Status          *models.MediaStatus
 	Rating          *float64
 	ReviewText      *string
@@ -207,6 +208,10 @@ func (r *MediaRepo) Update(ctx context.Context, id, userID int, in UpdateMediaIn
 	sets := []string{"updated_at = NOW()"}
 	args := []any{id, userID}
 
+	if in.Title != nil {
+		args = append(args, *in.Title)
+		sets = append(sets, fmt.Sprintf("title = $%d", len(args)))
+	}
 	if in.Status != nil {
 		args = append(args, *in.Status)
 		sets = append(sets, fmt.Sprintf("status = $%d", len(args)))

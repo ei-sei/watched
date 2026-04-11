@@ -87,7 +87,10 @@ func (h *ImportHandler) ImportMAL(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, result)
 
 	if len(toEnrich) > 0 {
-		go h.enrichPosters(context.Background(), toEnrich)
+		go func() {
+			h.enrichTitles(context.Background(), toEnrich)
+			h.enrichPosters(context.Background(), toEnrich)
+		}()
 	}
 }
 
@@ -185,7 +188,7 @@ func (h *ImportHandler) upsertAnimeList(ctx context.Context, userID int, items [
 			}
 
 			if poster == nil {
-				toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID})
+				toEnrich = append(toEnrich, enrichItem{id: created.ID, malID: a.ID, userID: userID})
 			}
 		}
 
@@ -207,8 +210,9 @@ func malDate(s string) *string {
 // ── Jikan poster enrichment ────────────────────────────────────────────────────
 
 type enrichItem struct {
-	id    int
-	malID int
+	id     int
+	malID  int
+	userID int
 }
 
 // anilistPoster fetches a cover image URL from AniList using the MAL ID.
@@ -335,6 +339,99 @@ func (h *ImportHandler) enrichPosters(ctx context.Context, items []enrichItem) {
 		if poster != nil {
 			_ = h.media.SetPoster(ctx, item.id, *poster)
 		}
+		time.Sleep(700 * time.Millisecond)
+	}
+}
+
+// enrichTitles batch-fetches English titles from AniList (50 per request) and
+// updates each item's title + stores title_romaji in metadata.
+func (h *ImportHandler) enrichTitles(ctx context.Context, items []enrichItem) {
+	if len(items) == 0 {
+		return
+	}
+	userID := items[0].userID
+
+	// Build a map from malID → db item ID for fast lookup
+	byMalID := make(map[int]int, len(items))
+	for _, it := range items {
+		byMalID[it.malID] = it.id
+	}
+
+	// Collect all MAL IDs
+	malIDs := make([]int, 0, len(items))
+	for _, it := range items {
+		malIDs = append(malIDs, it.malID)
+	}
+
+	const batchSize = 50
+	for i := 0; i < len(malIDs); i += batchSize {
+		batch := malIDs[i:min(i+batchSize, len(malIDs))]
+
+		payload, _ := json.Marshal(map[string]any{
+			"query":     `query($ids:[Int]){Page(perPage:50){media(idMal_in:$ids,type:ANIME){idMal title{romaji english}}}}`,
+			"variables": map[string]any{"ids": batch},
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(string(payload)))
+		if err != nil {
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := h.client.Do(req)
+		if err != nil {
+			continue
+		}
+
+		var raw struct {
+			Data struct {
+				Page struct {
+					Media []struct {
+						IdMal *int `json:"idMal"`
+						Title struct {
+							Romaji  string `json:"romaji"`
+							English string `json:"english"`
+						} `json:"title"`
+					} `json:"media"`
+				} `json:"Page"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+
+		for _, m := range raw.Data.Page.Media {
+			if m.IdMal == nil {
+				continue
+			}
+			dbID, ok := byMalID[*m.IdMal]
+			if !ok {
+				continue
+			}
+			english := m.Title.English
+			if english == "" {
+				english = m.Title.Romaji
+			}
+
+			// Fetch current metadata to merge title_romaji in
+			existing, err := h.media.GetByID(ctx, dbID, userID)
+			if err != nil || existing == nil {
+				continue
+			}
+			meta := existing.Metadata
+			if meta == nil {
+				meta = map[string]any{}
+			}
+			meta["title_romaji"] = m.Title.Romaji
+
+			title := english
+			_, _ = h.media.Update(ctx, dbID, userID, repository.UpdateMediaInput{
+				Title:    &title,
+				Metadata: meta,
+			})
+		}
+
+		// Stay within AniList's 90 req/min rate limit
 		time.Sleep(700 * time.Millisecond)
 	}
 }
