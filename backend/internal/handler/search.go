@@ -276,7 +276,7 @@ func (h *SearchHandler) searchGoogleBooks(ctx context.Context, q string) ([]mode
 		}
 		var poster *string
 		if vi.ImageLinks != nil {
-			s := vi.ImageLinks.Thumbnail
+			s := strings.Replace(vi.ImageLinks.Thumbnail, "http://", "https://", 1)
 			poster = &s
 		}
 		desc := vi.Description
