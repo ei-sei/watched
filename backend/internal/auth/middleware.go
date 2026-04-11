@@ -41,6 +41,18 @@ func RequireAdmin(next http.Handler) http.Handler {
 	})
 }
 
+// RequirePremium 403s if the authenticated user is not premium (admins pass through).
+func RequirePremium(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c := ClaimsFrom(r.Context())
+		if c == nil || (!c.IsPremium && !c.IsAdmin) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // ClaimsFrom retrieves the JWT claims stored by Authenticate.
 func ClaimsFrom(ctx context.Context) *Claims {
 	c, _ := ctx.Value(claimsKey).(*Claims)
