@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS media_items_user_id_media_type_status_idx;
+DROP INDEX IF EXISTS media_items_user_id_updated_at_idx;
+DROP INDEX IF EXISTS media_items_user_id_rating_idx;
+DROP INDEX IF EXISTS tv_episode_logs_media_item_id_watched_at_idx;
+DROP INDEX IF EXISTS book_chapter_logs_media_item_id_completed_at_idx;
