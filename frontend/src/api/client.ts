@@ -7,14 +7,49 @@ const client = axios.create({
   timeout: 15000,
 })
 
-client.interceptors.request.use(async (config) => {
-  const token = await storage.get('access_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+// Decode JWT exp claim client-side (no verification needed — server verifies)
+function tokenExpiresAt(token: string): number {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return (payload.exp ?? 0) * 1000
+  } catch { return 0 }
+}
 
 let isRefreshing = false
 let refreshQueue: Array<(token: string) => void> = []
+
+async function doRefresh(): Promise<string> {
+  const { data } = await client.post<{ access_token: string }>('/auth/refresh')
+  await storage.set('access_token', data.access_token)
+  return data.access_token
+}
+
+client.interceptors.request.use(async (config) => {
+  let token = await storage.get('access_token')
+
+  // Proactively refresh if the token expires within 5 minutes
+  if (token && tokenExpiresAt(token) - Date.now() < 5 * 60 * 1000) {
+    if (!isRefreshing) {
+      isRefreshing = true
+      try {
+        token = await doRefresh()
+        refreshQueue.forEach((cb) => cb(token!))
+        refreshQueue = []
+      } catch {
+        // Refresh failed — let the request go out with the old token;
+        // the 401 interceptor below will handle it
+      } finally {
+        isRefreshing = false
+      }
+    } else {
+      // Another request is already refreshing — wait for it
+      token = await new Promise<string>((resolve) => refreshQueue.push(resolve))
+    }
+  }
+
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
 
 client.interceptors.response.use(
   (response) => response,
@@ -32,19 +67,17 @@ client.interceptors.response.use(
       }
       isRefreshing = true
       try {
-        const { data } = await client.post('/auth/refresh')
-        await storage.set('access_token', data.access_token)
-        refreshQueue.forEach((cb) => cb(data.access_token))
+        const token = await doRefresh()
+        refreshQueue.forEach((cb) => cb(token))
         refreshQueue = []
-        original.headers.Authorization = `Bearer ${data.access_token}`
+        original.headers.Authorization = `Bearer ${token}`
         return client(original)
       } catch (refreshErr: any) {
-        // Only force logout on actual auth failures — not network errors or server blips
+        // Only force logout on definitive auth failures — not network errors
         const status = refreshErr?.response?.status
         if (status === 401 || status === 403) {
           refreshQueue = []
           await storage.remove('access_token')
-          await client.post('/auth/logout').catch(() => {})
           window.location.replace('/login')
         } else {
           refreshQueue = []
