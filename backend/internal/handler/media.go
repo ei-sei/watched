@@ -360,16 +360,20 @@ func (h *MediaHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Status          *models.MediaStatus `json:"status"`
-		Rating          *float64            `json:"rating"`
-		ReviewText      *string             `json:"review_text"`
+		Status          *models.MediaStatus `json:"status"           validate:"omitempty,oneof=want_to in_progress completed dropped on_hold"`
+		Rating          *float64            `json:"rating"           validate:"omitempty,min=1,max=10"`
+		ReviewText      *string             `json:"review_text"      validate:"omitempty,max=5000"`
 		StartedAt       *string             `json:"started_at"`
 		CompletedAt     *string             `json:"completed_at"`
-		CurrentProgress *int                `json:"current_progress"`
-		TotalProgress   *int                `json:"total_progress"`
+		CurrentProgress *int                `json:"current_progress" validate:"omitempty,min=0"`
+		TotalProgress   *int                `json:"total_progress"   validate:"omitempty,min=0"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if err := h.validate.Struct(body); err != nil {
+		jsonErr(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
