@@ -57,7 +57,7 @@ export default function MediaLibrary({ type }: Props) {
 
       {/* Filters */}
       <div className="flex items-center gap-2">
-        <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1">
+        <div className="flex gap-1.5 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] flex-1 min-w-0">
           {STATUS_OPTIONS.map((value) => {
             const labels = type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS
             const label = value === '' ? 'All' : labels[value]
