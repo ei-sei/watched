@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/Toast'
 import { formatDate } from '@/utils/formatters'
 import { mediaApi } from '@/api/media'
 import { RefreshCw, Trash2 } from 'lucide-react'
-import { STATUS_LABELS, STATUS_COLOURS } from '@/utils/constants'
+import { STATUS_LABELS, STATUS_LABELS_BOOK, STATUS_COLOURS } from '@/utils/constants'
 import type { MediaItem, MediaStatus } from '@/types/media'
 
 const REFRESH_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour
@@ -131,7 +131,7 @@ export default function MediaDetail() {
                       : 'bg-transparent text-zinc-600 hover:text-zinc-400 border border-white/[0.06] hover:border-white/[0.12]'
                   }`}
                 >
-                  {STATUS_LABELS[s]}
+                  {(item.media_type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS)[s]}
                 </button>
               )
             })}

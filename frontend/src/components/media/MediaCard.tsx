@@ -29,7 +29,7 @@ export default function MediaCard({ item }: Props) {
           <p className="text-xs font-medium text-zinc-200 truncate leading-snug">{item.title}</p>
           {item.year && <p className="text-xs text-zinc-600">{item.year}</p>}
           <div className="flex items-center justify-between pt-0.5">
-            <StatusBadge status={item.status} />
+            <StatusBadge status={item.status} mediaType={item.media_type} />
             <RatingDisplay rating={item.rating} size="sm" />
           </div>
         </div>
