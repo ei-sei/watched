@@ -83,10 +83,11 @@ function TrendingRow({ section }: { section: TrendingSection }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{section.label}</p>
-      <div className="flex gap-3 overflow-x-auto pb-1 pr-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {section.items.map(item => (
           <PosterCard key={item.id} item={item} />
         ))}
+        <div className="flex-none w-4" aria-hidden="true" />
       </div>
     </div>
   )
