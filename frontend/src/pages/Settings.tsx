@@ -98,8 +98,11 @@ function ImportCard() {
         return
       }
       const total: number = data.queued
-      const msPerItem = 350
+      // Backend processes at 700ms/item — match the timer so UI doesn't
+      // finish before the goroutine does, causing a stale count re-check.
+      const msPerItem = 700
       const startedAt = Date.now()
+      setMissingCount(0) // optimistically clear while fetch runs
       setPosterProgress({ current: 0, total })
       const id = setInterval(async () => {
         const elapsed = Date.now() - startedAt
@@ -107,7 +110,8 @@ function ImportCard() {
         setPosterProgress({ current: estimated, total })
         if (estimated >= total) {
           clearInterval(id)
-          // Verify with server how many are still missing
+          // Add a small buffer then verify with server how many are still missing
+          await new Promise(r => setTimeout(r, 1500))
           try {
             const { data: check } = await client.get('/import/posters/missing-count')
             setMissingCount(check.count)
