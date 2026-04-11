@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import { useLocalMediaList } from '@/hooks/useLocalMedia'
 import MediaGrid from '@/components/media/MediaGrid'
@@ -12,7 +13,15 @@ interface Props { type: MediaType }
 const STATUS_OPTIONS: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'completed', 'on_hold', 'dropped']
 
 export default function MediaLibrary({ type }: Props) {
-  const [status, setStatus] = useState<MediaStatus | ''>('in_progress')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const validStatuses: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'completed', 'on_hold', 'dropped']
+  const paramStatus = searchParams.get('status') ?? 'in_progress'
+  const status: MediaStatus | '' = validStatuses.includes(paramStatus as MediaStatus | '') ? paramStatus as MediaStatus | '' : 'in_progress'
+
+  const setStatus = (value: MediaStatus | '') => {
+    setSearchParams(value ? { status: value } : {}, { replace: true })
+  }
+
   const [statusOpen, setStatusOpen] = useState(false)
   const [sort, setSort] = useState('created_at')
   const statusRef = useRef<HTMLDivElement>(null)
