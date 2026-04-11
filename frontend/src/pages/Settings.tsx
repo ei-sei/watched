@@ -6,7 +6,7 @@ import { authApi } from '@/api/auth'
 import client from '@/api/client'
 import { useToast } from '@/components/ui/Toast'
 import { db } from '@/offline/db'
-import type { MediaItem } from '@/types/media'
+import type { MediaItem, MediaStatus } from '@/types/media'
 
 // ── Import card ────────────────────────────────────────────────────────────────
 
@@ -319,6 +319,16 @@ function ConfirmClearModal({ label, onConfirm, onCancel }: {
   )
 }
 
+// ── Profile visibility ────────────────────────────────────────────────────────
+
+const PROFILE_STATUSES: { value: MediaStatus; label: string }[] = [
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'on_hold', label: 'On Hold' },
+  { value: 'dropped', label: 'Dropped' },
+  { value: 'want_to', label: 'Plan to Watch' },
+]
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function Settings() {
@@ -327,6 +337,9 @@ export default function Settings() {
   const qc = useQueryClient()
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [isPublic, setIsPublic] = useState(user?.is_public ?? false)
+  const [visibleStatuses, setVisibleStatuses] = useState<MediaStatus[]>(
+    (user?.profile_settings?.visible_statuses as MediaStatus[] | null) ?? PROFILE_STATUSES.map((s) => s.value)
+  )
   const [pw, setPw] = useState({ current: '', next: '' })
   const [pwConfirm, setPwConfirm] = useState('')
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false })
@@ -350,6 +363,19 @@ export default function Settings() {
     } catch {
       setIsPublic(!val)
       show('Failed to update privacy', 'error')
+    }
+  }
+
+  const toggleVisibleStatus = async (status: MediaStatus) => {
+    const next = visibleStatuses.includes(status)
+      ? visibleStatuses.filter((s) => s !== status)
+      : [...visibleStatuses, status]
+    setVisibleStatuses(next)
+    try {
+      await authApi.updateMe({ profile_settings: { visible_statuses: next } })
+    } catch {
+      setVisibleStatuses(visibleStatuses)
+      show('Failed to update visibility', 'error')
     }
   }
 
@@ -451,20 +477,45 @@ export default function Settings() {
             </button>
           </div>
           {isPublic && (
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs text-zinc-400 bg-[#111] px-3 py-1.5 rounded-md border border-white/[0.06] truncate">
-                {window.location.origin}/u/{user?.username}
-              </code>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/u/${user?.username}`)
-                  show('Link copied', 'success')
-                }}
-                className={btnClass}
-              >
-                Copy
-              </button>
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs text-zinc-400 bg-[#111] px-3 py-1.5 rounded-md border border-white/[0.06] truncate">
+                  {window.location.origin}/u/{user?.username}
+                </code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/u/${user?.username}`)
+                    show('Link copied', 'success')
+                  }}
+                  className={btnClass}
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="pt-2 border-t border-white/[0.06] space-y-2.5">
+                <p className="text-xs text-zinc-500">Visible on your profile</p>
+                {PROFILE_STATUSES.map(({ value, label }) => {
+                  const checked = visibleStatuses.includes(value)
+                  return (
+                    <div key={value} className="flex items-center justify-between">
+                      <p className="text-sm text-zinc-300">{label}</p>
+                      <button
+                        onClick={() => toggleVisibleStatus(value)}
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors ${
+                          checked ? 'bg-indigo-600' : 'bg-white/10'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white shadow transition-transform ${
+                            checked ? 'translate-x-4' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </div>
 

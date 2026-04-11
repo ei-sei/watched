@@ -3,19 +3,28 @@ package models
 import "time"
 
 type User struct {
-	ID             int        `json:"id"`
-	Username       string     `json:"username"`
-	Email          *string    `json:"email"`
-	PasswordHash   string     `json:"-"`
-	DisplayName    *string    `json:"display_name"`
-	AvatarURL      *string    `json:"avatar_url"`
-	IsAdmin        bool       `json:"is_admin"`
-	IsPremium      bool       `json:"is_premium"`
-	IsPublic       bool       `json:"is_public"`
-	FailedAttempts int        `json:"-"`
-	LockedUntil    *time.Time `json:"-"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID              int             `json:"id"`
+	Username        string          `json:"username"`
+	Email           *string         `json:"email"`
+	PasswordHash    string          `json:"-"`
+	DisplayName     *string         `json:"display_name"`
+	AvatarURL       *string         `json:"avatar_url"`
+	IsAdmin         bool            `json:"is_admin"`
+	IsPremium       bool            `json:"is_premium"`
+	IsPublic        bool            `json:"is_public"`
+	ProfileSettings ProfileSettings `json:"profile_settings"`
+	FailedAttempts  int             `json:"-"`
+	LockedUntil     *time.Time      `json:"-"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+// ProfileSettings controls what's shown on a user's public profile.
+// VisibleStatuses == nil means "show all statuses" (the default for users
+// who haven't configured this); a non-nil slice (including empty) restricts
+// the public profile to only those statuses.
+type ProfileSettings struct {
+	VisibleStatuses []MediaStatus `json:"visible_statuses"`
 }
 
 type MediaType   string

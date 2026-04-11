@@ -15,11 +15,11 @@ type UserRepo struct{ db *pgxpool.Pool }
 func NewUserRepo(db *pgxpool.Pool) *UserRepo { return &UserRepo{db: db} }
 
 const userColumns = `id, username, email, password_hash, display_name, avatar_url,
-	is_admin, is_premium, is_public, failed_attempts, locked_until, created_at, updated_at`
+	is_admin, is_premium, is_public, profile_settings, failed_attempts, locked_until, created_at, updated_at`
 
 func scanUserFields(u *models.User, scan func(...any) error) error {
 	return scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL,
-		&u.IsAdmin, &u.IsPremium, &u.IsPublic, &u.FailedAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
+		&u.IsAdmin, &u.IsPremium, &u.IsPublic, &u.ProfileSettings, &u.FailedAttempts, &u.LockedUntil, &u.CreatedAt, &u.UpdatedAt)
 }
 
 func scanUser(row pgx.Row) (*models.User, error) {
@@ -56,16 +56,17 @@ func (r *UserRepo) UpdateLoginFail(ctx context.Context, id, attempts int, locked
 	return err
 }
 
-func (r *UserRepo) UpdateMe(ctx context.Context, id int, displayName, avatarURL *string, isPublic *bool) (*models.User, error) {
+func (r *UserRepo) UpdateMe(ctx context.Context, id int, displayName, avatarURL *string, isPublic *bool, profileSettings *models.ProfileSettings) (*models.User, error) {
 	return scanUser(r.db.QueryRow(ctx,
 		`UPDATE users SET
-		    display_name = COALESCE($2, display_name),
-		    avatar_url   = COALESCE($3, avatar_url),
-		    is_public    = COALESCE($4, is_public),
-		    updated_at   = NOW()
+		    display_name     = COALESCE($2, display_name),
+		    avatar_url       = COALESCE($3, avatar_url),
+		    is_public        = COALESCE($4, is_public),
+		    profile_settings = COALESCE($5, profile_settings),
+		    updated_at       = NOW()
 		 WHERE id = $1
 		 RETURNING `+userColumns,
-		id, displayName, avatarURL, isPublic))
+		id, displayName, avatarURL, isPublic, profileSettings))
 }
 
 func (r *UserRepo) UpdatePassword(ctx context.Context, id int, hash string) error {

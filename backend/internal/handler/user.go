@@ -51,17 +51,28 @@ func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
 // PATCH /users/me
 func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		DisplayName *string `json:"display_name"`
-		AvatarURL   *string `json:"avatar_url"`
-		IsPublic    *bool   `json:"is_public"`
+		DisplayName     *string                 `json:"display_name"`
+		AvatarURL       *string                 `json:"avatar_url"`
+		IsPublic        *bool                   `json:"is_public"`
+		ProfileSettings *models.ProfileSettings `json:"profile_settings"`
 	}
 	if err := decode(r, &body); err != nil {
 		jsonErr(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
+	if body.ProfileSettings != nil {
+		for _, s := range body.ProfileSettings.VisibleStatuses {
+			switch s {
+			case models.StatusWantTo, models.StatusInProgress, models.StatusCompleted, models.StatusDropped, models.StatusOnHold:
+			default:
+				jsonErr(w, http.StatusUnprocessableEntity, "invalid status in visible_statuses")
+				return
+			}
+		}
+	}
 
 	claims := auth.ClaimsFrom(r.Context())
-	user, err := h.users.UpdateMe(r.Context(), claims.UserID, body.DisplayName, body.AvatarURL, body.IsPublic)
+	user, err := h.users.UpdateMe(r.Context(), claims.UserID, body.DisplayName, body.AvatarURL, body.IsPublic, body.ProfileSettings)
 	if err != nil || user == nil {
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
@@ -125,11 +136,26 @@ func (h *UserHandler) PublicProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	items := result.Items
+	if visible := user.ProfileSettings.VisibleStatuses; visible != nil {
+		visibleSet := make(map[models.MediaStatus]bool, len(visible))
+		for _, s := range visible {
+			visibleSet[s] = true
+		}
+		filtered := items[:0]
+		for _, item := range items {
+			if visibleSet[item.Status] {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
+
 	jsonOK(w, map[string]any{
 		"username":     user.Username,
 		"display_name": user.DisplayName,
 		"avatar_url":   user.AvatarURL,
-		"media":        result.Items,
+		"media":        items,
 	})
 }
 

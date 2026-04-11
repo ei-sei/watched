@@ -1,3 +1,7 @@
+export interface ProfileSettings {
+  visible_statuses: string[] | null
+}
+
 export interface User {
   id: number
   username: string
@@ -6,6 +10,7 @@ export interface User {
   is_admin: boolean
   is_premium: boolean
   is_public: boolean
+  profile_settings: ProfileSettings
   created_at: string
   feature_flags: Record<string, boolean>
 }
