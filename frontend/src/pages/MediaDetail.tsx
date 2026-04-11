@@ -15,6 +15,8 @@ import { mediaApi } from '@/api/media'
 import { RefreshCw, Trash2 } from 'lucide-react'
 import { STATUS_LABELS, STATUS_LABELS_BOOK, STATUS_COLOURS } from '@/utils/constants'
 import type { MediaItem, MediaStatus } from '@/types/media'
+import StatusBadge from '@/components/ui/StatusBadge'
+import StatusSheet from '@/components/ui/StatusSheet'
 
 const REFRESH_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour
 
@@ -41,6 +43,7 @@ export default function MediaDetail() {
   const qc = useQueryClient()
   const { show } = useToast()
   const [refreshing, setRefreshing] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   // Pull fresh episodes/chapters for this item in the background
   useEffect(() => {
@@ -110,32 +113,57 @@ export default function MediaDetail() {
             </button>
           </div>
 
-          {/* Status pills */}
-          <div className="flex flex-wrap gap-1.5">
-            {STATUSES.map((s) => {
-              const active = item.status === s
-              const colours = STATUS_COLOURS[s] ?? 'bg-zinc-700 text-zinc-300'
-              return (
-                <button
-                  key={s}
-                  onClick={() => {
-                    const today = new Date().toISOString().slice(0, 10)
-                    const extra: Partial<MediaItem> = {}
-                    if (s === 'completed' && !item.completed_at) extra.completed_at = today
-                    if (s === 'in_progress' && !item.started_at) extra.started_at = today
-                    update.mutate({ id: item.id, data: { status: s, ...extra } })
-                  }}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                    active
-                      ? colours
-                      : 'bg-transparent text-zinc-600 hover:text-zinc-400 border border-white/[0.06] hover:border-white/[0.12]'
-                  }`}
-                >
-                  {(item.media_type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS)[s]}
-                </button>
-              )
-            })}
+          {/* Status — bottom sheet on mobile, pills on desktop */}
+          <div>
+            {/* Mobile: tap badge to open sheet */}
+            <button
+              className="md:hidden"
+              onClick={() => setSheetOpen(true)}
+            >
+              <StatusBadge status={item.status} mediaType={item.media_type} />
+            </button>
+
+            {/* Desktop: inline pill row */}
+            <div className="hidden md:flex flex-wrap gap-1.5">
+              {STATUSES.map((s) => {
+                const active = item.status === s
+                const colours = STATUS_COLOURS[s] ?? 'bg-zinc-700 text-zinc-300'
+                return (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      const today = new Date().toISOString().slice(0, 10)
+                      const extra: Partial<MediaItem> = {}
+                      if (s === 'completed' && !item.completed_at) extra.completed_at = today
+                      if (s === 'in_progress' && !item.started_at) extra.started_at = today
+                      update.mutate({ id: item.id, data: { status: s, ...extra } })
+                    }}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                      active
+                        ? colours
+                        : 'bg-transparent text-zinc-600 hover:text-zinc-400 border border-white/[0.06] hover:border-white/[0.12]'
+                    }`}
+                  >
+                    {(item.media_type === 'book' ? STATUS_LABELS_BOOK : STATUS_LABELS)[s]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
+
+          <StatusSheet
+            open={sheetOpen}
+            current={item.status}
+            mediaType={item.media_type}
+            onSelect={(s) => {
+              const today = new Date().toISOString().slice(0, 10)
+              const extra: Partial<MediaItem> = {}
+              if (s === 'completed' && !item.completed_at) extra.completed_at = today
+              if (s === 'in_progress' && !item.started_at) extra.started_at = today
+              update.mutate({ id: item.id, data: { status: s, ...extra } })
+            }}
+            onClose={() => setSheetOpen(false)}
+          />
 
           {/* Rating row */}
           <div className="space-y-1.5">
