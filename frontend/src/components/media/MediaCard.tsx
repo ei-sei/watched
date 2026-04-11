@@ -34,7 +34,6 @@ export default function MediaCard({ item }: Props) {
           </div>
           <div className="px-2.5 py-2 space-y-1.5">
             <p className="text-xs font-medium text-zinc-200 truncate leading-snug">{item.title}</p>
-            {item.year && <p className="text-xs text-zinc-600">{item.year}</p>}
             <div className="flex items-end justify-between pt-0.5">
               {/* Mobile: tap badge opens sheet; desktop: badge is decorative */}
               <button
