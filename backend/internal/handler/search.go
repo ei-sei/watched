@@ -102,6 +102,7 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	rankResults(all, q)
 	jsonOK(w, all)
 }
 
@@ -130,6 +131,7 @@ func (h *SearchHandler) searchTMDB(ctx context.Context, q string) ([]models.Sear
 			FirstAirDate string  `json:"first_air_date"`
 			PosterPath   *string `json:"poster_path"`
 			Overview     string  `json:"overview"`
+			Popularity   float64 `json:"popularity"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
@@ -173,6 +175,7 @@ func (h *SearchHandler) searchTMDB(ctx context.Context, q string) ([]models.Sear
 			Year:        year,
 			PosterURL:   poster,
 			Description: &desc,
+			Popularity:  r.Popularity,
 		})
 	}
 	return out, nil
@@ -333,6 +336,10 @@ func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.Sea
 			"score":    a.Score,
 			"episodes": a.Episodes,
 		}
+		pop := 0.0
+		if a.Score != nil {
+			pop = *a.Score * 10 // scale 0–10 → 0–100 to roughly match TMDB popularity range
+		}
 		out = append(out, models.SearchResult{
 			Source:      "jikan",
 			MediaType:   string(models.MediaTypeAnime),
@@ -342,9 +349,43 @@ func (h *SearchHandler) searchJikan(ctx context.Context, q string) ([]models.Sea
 			PosterURL:   poster,
 			Description: &desc,
 			Extra:       extra,
+			Popularity:  pop,
 		})
 	}
 	return out, nil
+}
+
+// rankResults sorts results so that:
+//  1. Exact title matches come first
+//  2. Prefix matches come next
+//  3. Higher popularity / score ranks higher within each tier
+//  4. Results missing a poster are pushed to the bottom within their tier
+func rankResults(results []models.SearchResult, q string) {
+	qNorm := normTitle(q)
+	score := func(r models.SearchResult) float64 {
+		t := normTitle(r.Title)
+		var s float64
+		switch {
+		case t == qNorm:
+			s = 3000
+		case strings.HasPrefix(t, qNorm):
+			s = 2000
+		case strings.Contains(t, qNorm):
+			s = 1000
+		}
+		s += r.Popularity
+		if r.PosterURL == nil || *r.PosterURL == "" {
+			s -= 500
+		}
+		return s
+	}
+
+	// Insertion sort — result sets are small (< 60 items) so this is fine.
+	for i := 1; i < len(results); i++ {
+		for j := i; j > 0 && score(results[j]) > score(results[j-1]); j-- {
+			results[j], results[j-1] = results[j-1], results[j]
+		}
+	}
 }
 
 // normTitle lowercases and strips common punctuation for loose title matching.
