@@ -1,15 +1,5 @@
 import client from './client'
-
-export interface SearchResult {
-  source: string
-  media_type: string
-  external_id: string
-  title: string
-  year: number | null
-  poster_url: string | null
-  description: string | null
-  extra: Record<string, unknown>
-}
+import type { SearchResult } from '@/types/media'
 
 export const searchApi = {
   search: (q: string, type?: string) =>

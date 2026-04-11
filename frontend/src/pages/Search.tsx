@@ -3,8 +3,7 @@ import { useSearch } from '@/hooks/useSearch'
 import { useCreateMedia } from '@/hooks/useMedia'
 import { useToast } from '@/components/ui/Toast'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import type { SearchResult as ApiSearchResult } from '@/api/search'
-import type { MediaType } from '@/types/media'
+import type { MediaType, SearchResult } from '@/types/media'
 
 const TABS = [
   { value: 'multi',   label: 'All' },
@@ -22,7 +21,7 @@ export default function Search() {
   const create = useCreateMedia()
   const { show } = useToast()
 
-  const handleAdd = async (result: ApiSearchResult) => {
+  const handleAdd = async (result: SearchResult) => {
     try {
       const totalProgress =
         (typeof result.extra?.episodes === 'number' && result.extra.episodes > 0 ? result.extra.episodes : undefined) ??
