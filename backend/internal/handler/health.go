@@ -78,6 +78,11 @@ func (h *HealthHandler) ExternalServices(w http.ResponseWriter, r *http.Request)
 			url:  "https://openlibrary.org/api/books?bibkeys=ISBN:9780140328721&format=json",
 			skip: false,
 		},
+		{
+			name: "AniList",
+			url:  "https://graphql.anilist.co",
+			skip: false,
+		},
 	}
 
 	results := make([]ServiceStatus, len(checks))
