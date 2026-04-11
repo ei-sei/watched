@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { db } from '@/offline/db'
 import { enqueue } from '@/offline/queue'
 import { episodesApi } from '@/api/episodes'
-import { mediaApi } from '@/api/media'
+import { scheduleItemRefetch } from '@/offline/sync'
 import type { EpisodeLog } from '@/types/media'
 
 export function useLocalEpisodes(mediaId: number) {
@@ -36,9 +36,8 @@ export function useLogEpisode(mediaId: number) {
         // Replace temp with real server record
         await db.episodeLogs.delete(tempId)
         await db.episodeLogs.put(ep)
-        // Sync the media item from server — backend may have auto-transitioned status
-        const { data: updatedItem } = await mediaApi.get(mediaId)
-        await db.mediaItems.put(updatedItem)
+        // Debounced re-fetch — picks up any status auto-transition from the backend
+        scheduleItemRefetch(mediaId)
         return ep
       } catch {
         await enqueue({
@@ -65,9 +64,7 @@ export function useDeleteEpisode(mediaId: number) {
 
       try {
         await episodesApi.delete(mediaId, epId)
-        // Sync the media item from server — backend may have auto-transitioned status
-        const { data: updatedItem } = await mediaApi.get(mediaId)
-        await db.mediaItems.put(updatedItem)
+        scheduleItemRefetch(mediaId)
       } catch {
         // If this was a temp record (negative id) nothing to DELETE on server
         if (epId > 0) {

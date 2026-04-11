@@ -34,27 +34,22 @@ func (h *StatsHandler) Summary(w http.ResponseWriter, r *http.Request) {
 
 // GET /stats
 func (h *StatsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	uid := userIDFrom(r)
+
+	byType, err := h.media.AllTypeStats(r.Context(), uid)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	types := []models.MediaType{models.MediaTypeFilm, models.MediaTypeTVShow, models.MediaTypeBook, models.MediaTypeAnime}
 	out := make([]mediaTypeStats, 0, len(types))
-
 	for _, mt := range types {
-		counts, err := h.media.CountByStatus(ctx, uid, mt)
-		if err != nil {
-			jsonErr(w, http.StatusInternalServerError, "internal error")
-			return
+		ts := byType[mt]
+		if ts.Counts == nil {
+			ts.Counts = []repository.StatusCount{}
 		}
-		avg, err := h.media.AverageRating(ctx, uid, mt)
-		if err != nil {
-			jsonErr(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if counts == nil {
-			counts = []repository.StatusCount{}
-		}
-		out = append(out, mediaTypeStats{Type: mt, Counts: counts, AvgRating: avg})
+		out = append(out, mediaTypeStats{Type: mt, Counts: ts.Counts, AvgRating: ts.AvgRating})
 	}
 
 	jsonOK(w, map[string]any{"by_type": out})
