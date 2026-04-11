@@ -16,7 +16,7 @@ export default function Trending() {
 
   if (!user?.is_premium && !user?.is_admin) {
     return (
-      <div className="max-w-2xl">
+      <div className="max-w-sm">
         <h1 className="text-2xl font-semibold text-white tracking-tight mb-5">Trending</h1>
         <div className="bg-[#1a1a1a] rounded-xl p-8 ring-1 ring-white/[0.06] flex flex-col items-center gap-4 text-center">
           <div className="w-12 h-12 rounded-full bg-white/[0.06] flex items-center justify-center">
@@ -36,11 +36,11 @@ export default function Trending() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5">
       <h1 className="text-2xl font-semibold text-white tracking-tight">Trending</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-white/[0.04] rounded-lg p-1">
+      <div className="flex gap-1 bg-white/[0.04] rounded-lg p-1 max-w-sm">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -83,11 +83,14 @@ function TrendingRow({ section }: { section: TrendingSection }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{section.label}</p>
-      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {section.items.map(item => (
-          <PosterCard key={item.id} item={item} />
-        ))}
-        <div className="flex-none w-4" aria-hidden="true" />
+      <div className="relative">
+        <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {section.items.map(item => (
+            <PosterCard key={item.id} item={item} />
+          ))}
+          <div className="flex-none w-4" aria-hidden="true" />
+        </div>
+        <div className="absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0d0d0d] to-transparent pointer-events-none" />
       </div>
     </div>
   )
