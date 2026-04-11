@@ -18,10 +18,15 @@ export function useLocalMediaList(params: MediaListParams) {
       items = items.filter((i) => i.status === params.status)
     }
 
-    // Text search on title
+    // Text search on title + romaji alternative title
     if (params.q) {
       const q = params.q.toLowerCase()
-      items = items.filter((i) => i.title.toLowerCase().includes(q))
+      items = items.filter((i) => {
+        if (i.title.toLowerCase().includes(q)) return true
+        const romaji = i.metadata?.title_romaji
+        if (typeof romaji === 'string' && romaji.toLowerCase().includes(q)) return true
+        return false
+      })
     }
 
     // Sort

@@ -435,9 +435,10 @@ func (h *SearchHandler) searchAniList(ctx context.Context, q string) ([]models.S
 		}
 		desc := m.Description
 		extra := map[string]any{
-			"mal_id":   *m.IdMal,
-			"episodes": m.Episodes,
-			"score":    m.AverageScore,
+			"mal_id":       *m.IdMal,
+			"episodes":     m.Episodes,
+			"score":        m.AverageScore,
+			"title_romaji": m.Title.Romaji,
 		}
 		out = append(out, models.SearchResult{
 			Source:      "anilist",
