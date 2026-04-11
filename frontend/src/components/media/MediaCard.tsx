@@ -46,7 +46,7 @@ export default function MediaCard({ item }: Props) {
               <span className="hidden md:inline-flex">
                 <StatusBadge status={item.status} mediaType={item.media_type} />
               </span>
-              <RatingDisplay rating={item.rating} size="sm" />
+              <span className="flex-shrink-0"><RatingDisplay rating={item.rating} size="sm" /></span>
             </div>
           </div>
         </div>
