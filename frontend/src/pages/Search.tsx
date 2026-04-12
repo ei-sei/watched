@@ -6,6 +6,32 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { Clock, X } from 'lucide-react'
 import type { MediaType, SearchResult } from '@/types/media'
 
+const TYPE_LABELS: Record<string, string> = {
+  film:    'Movie',
+  tv_show: 'TV Series',
+  book:    'Book',
+  anime:   'Anime',
+}
+
+function friendlyMeta(result: SearchResult): string {
+  const parts: string[] = []
+  parts.push(TYPE_LABELS[result.media_type] ?? result.media_type)
+  if (result.year) parts.push(String(result.year))
+  if (result.media_type === 'book') {
+    const authors = result.extra?.authors
+    if (Array.isArray(authors) && authors.length > 0) {
+      parts.push(authors.slice(0, 2).join(', '))
+    }
+  }
+  if (result.media_type === 'anime' || result.media_type === 'tv_show') {
+    const episodes = result.extra?.episodes
+    if (typeof episodes === 'number' && episodes > 0) {
+      parts.push(`${episodes} eps`)
+    }
+  }
+  return parts.join(' · ')
+}
+
 const RECENTS_KEY = 'search_recents'
 const MAX_RECENTS = 8
 
@@ -179,7 +205,7 @@ export default function Search() {
                   )}
                 </div>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  {result.year} · {result.media_type.replace('_', ' ')} · {result.source}
+                  {friendlyMeta(result)}
                 </p>
                 {result.description && (
                   <p className="text-xs text-zinc-600 mt-1.5 line-clamp-2 leading-relaxed">{result.description}</p>
