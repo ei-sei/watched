@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -434,6 +435,105 @@ func (h *ImportHandler) enrichTitles(ctx context.Context, items []enrichItem) {
 	}
 }
 
+// ── Film poster enrichment (TMDB) ─────────────────────────────────────────────
+
+type filmEnrichItem struct {
+	id    int
+	title string
+	year  *int
+}
+
+func (h *ImportHandler) enrichFilmPosters(ctx context.Context, items []filmEnrichItem) {
+	if h.cfg.TMDBKey == "" {
+		return
+	}
+	for _, item := range items {
+		if poster := h.tmdbPoster(ctx, item.title, item.year); poster != nil {
+			_ = h.media.SetPoster(ctx, item.id, *poster)
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+func (h *ImportHandler) tmdbPoster(ctx context.Context, title string, year *int) *string {
+	u := fmt.Sprintf("https://api.themoviedb.org/3/search/movie?api_key=%s&query=%s",
+		h.cfg.TMDBKey, url.QueryEscape(title))
+	if year != nil {
+		u += fmt.Sprintf("&year=%d", *year)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return nil
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		Results []struct {
+			PosterPath *string `json:"poster_path"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || len(raw.Results) == 0 || raw.Results[0].PosterPath == nil {
+		return nil
+	}
+	s := "https://image.tmdb.org/t/p/w500" + *raw.Results[0].PosterPath
+	return &s
+}
+
+// ── Book poster enrichment (Google Books) ─────────────────────────────────────
+
+type bookEnrichItem struct {
+	id    int
+	title string
+}
+
+func (h *ImportHandler) enrichBookPosters(ctx context.Context, items []bookEnrichItem) {
+	for _, item := range items {
+		if poster := h.googleBooksPoster(ctx, item.title); poster != nil {
+			_ = h.media.SetPoster(ctx, item.id, *poster)
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+func (h *ImportHandler) googleBooksPoster(ctx context.Context, title string) *string {
+	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=1", url.QueryEscape(title))
+	if h.cfg.GoogleBooksKey != "" {
+		apiURL += "&key=" + h.cfg.GoogleBooksKey
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return nil
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		Items []struct {
+			VolumeInfo struct {
+				ImageLinks *struct {
+					Thumbnail string `json:"thumbnail"`
+				} `json:"imageLinks"`
+			} `json:"volumeInfo"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || len(raw.Items) == 0 || raw.Items[0].VolumeInfo.ImageLinks == nil {
+		return nil
+	}
+	s := strings.Replace(raw.Items[0].VolumeInfo.ImageLinks.Thumbnail, "http://", "https://", 1)
+	return &s
+}
+
 // ── Letterboxd CSV import ──────────────────────────────────────────────────────
 
 // POST /import/letterboxd  (multipart, field: "file")
@@ -474,6 +574,7 @@ func (h *ImportHandler) ImportLetterboxd(w http.ResponseWriter, r *http.Request)
 
 	userID := auth.ClaimsFrom(r.Context()).UserID
 	result := importResult{Errors: []string{}}
+	var toEnrich []filmEnrichItem
 
 	for _, row := range records[1:] {
 		if len(row) <= nameCol {
@@ -536,10 +637,18 @@ func (h *ImportHandler) ImportLetterboxd(w http.ResponseWriter, r *http.Request)
 			_, _ = h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating})
 		}
 
+		if created != nil {
+			toEnrich = append(toEnrich, filmEnrichItem{id: created.ID, title: title, year: year})
+		}
+
 		result.Imported++
 	}
 
 	jsonOK(w, result)
+
+	if len(toEnrich) > 0 {
+		go h.enrichFilmPosters(context.Background(), toEnrich)
+	}
 }
 
 // letterboxdSlug extracts the film slug from a Letterboxd URI.
@@ -596,6 +705,7 @@ func (h *ImportHandler) ImportGoodreads(w http.ResponseWriter, r *http.Request) 
 
 	userID := auth.ClaimsFrom(r.Context()).UserID
 	result := importResult{Errors: []string{}}
+	var toEnrich []bookEnrichItem
 
 	for _, row := range records[1:] {
 		if len(row) <= titleCol {
@@ -686,10 +796,18 @@ func (h *ImportHandler) ImportGoodreads(w http.ResponseWriter, r *http.Request) 
 			_, _ = h.media.Update(r.Context(), created.ID, userID, repository.UpdateMediaInput{Rating: rating})
 		}
 
+		if created != nil {
+			toEnrich = append(toEnrich, bookEnrichItem{id: created.ID, title: title})
+		}
+
 		result.Imported++
 	}
 
 	jsonOK(w, result)
+
+	if len(toEnrich) > 0 {
+		go h.enrichBookPosters(context.Background(), toEnrich)
+	}
 }
 
 // reverseAuthorName converts "Last, First" → "First Last".
