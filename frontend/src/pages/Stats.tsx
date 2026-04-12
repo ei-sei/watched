@@ -51,8 +51,8 @@ function RatingChart({ data }: { data: { rating: number; count: number }[] }) {
   )
 
   // SVG coordinate space
-  const W = 320, H = 160
-  const padL = 28, padR = 8, padT = 12, padB = 20
+  const W = 400, H = 130
+  const padL = 28, padR = 6, padT = 10, padB = 18
   const chartW = W - padL - padR
   const chartH = H - padT - padB
   const barW = chartW / 10
@@ -82,7 +82,7 @@ function RatingChart({ data }: { data: { rating: number; count: number }[] }) {
 
   return (
     <div className="relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         {/* Y-axis grid + labels */}
         {ticks.map(tick => {
           const y = padT + chartH - (tick / niceMax) * chartH
@@ -289,8 +289,8 @@ export default function Stats() {
 
       {/* Rating distribution */}
       {ratingDist.length > 0 && (
-        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
-          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Rating distribution</p>
+        <div className="bg-[#1a1a1a] rounded-xl ring-1 ring-white/[0.06] overflow-hidden">
+          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider px-4 pt-4 pb-2">Rating distribution</p>
           <RatingChart data={ratingDist} />
         </div>
       )}
