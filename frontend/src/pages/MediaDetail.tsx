@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocalMediaItem } from '@/hooks/useLocalMedia'
@@ -31,6 +31,51 @@ function setLastRefresh(item: MediaItem) {
 }
 
 const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'dropped', 'on_hold']
+
+function DateField({ label, value, onChange }: {
+  label: string
+  value: string | null | undefined
+  onChange: (val: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) inputRef.current?.showPicker?.()
+  }, [editing])
+
+  if (editing) {
+    return (
+      <div>
+        <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">{label}</p>
+        <input
+          ref={inputRef}
+          type="date"
+          defaultValue={value ?? ''}
+          autoFocus
+          onChange={(e) => {
+            onChange(e.target.value || null)
+            setEditing(false)
+          }}
+          onBlur={() => setEditing(false)}
+          className="bg-white/[0.04] text-zinc-300 text-sm rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">{label}</p>
+      <button
+        onClick={() => setEditing(true)}
+        className="text-sm text-zinc-400 hover:text-white transition-colors"
+      >
+        {value ? formatDate(value) : <span className="text-zinc-700">Add date</span>}
+      </button>
+    </div>
+  )
+}
 
 export default function MediaDetail() {
   const { id } = useParams<{ id: string }>()
@@ -200,6 +245,20 @@ export default function MediaDetail() {
               rows={3}
               placeholder="Your thoughts…"
               className="w-full bg-white/[0.03] text-zinc-300 placeholder-zinc-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all"
+            />
+          </div>
+
+          {/* Dates */}
+          <div className="flex gap-6">
+            <DateField
+              label="Started"
+              value={item.started_at}
+              onChange={(val) => update.mutate({ id: item.id, data: { started_at: val } })}
+            />
+            <DateField
+              label="Finished"
+              value={item.completed_at}
+              onChange={(val) => update.mutate({ id: item.id, data: { completed_at: val } })}
             />
           </div>
         </div>
