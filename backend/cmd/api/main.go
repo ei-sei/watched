@@ -41,6 +41,7 @@ func main() {
 	episodeRepo := repository.NewEpisodeRepo(pool)
 	chapterRepo := repository.NewChapterRepo(pool)
 	listRepo    := repository.NewListRepo(pool)
+	rewatchRepo := repository.NewRewatchRepo(pool)
 
 	// Handlers
 	authH   := handler.NewAuthHandler(userRepo, cfg)
@@ -53,6 +54,7 @@ func main() {
 	importH   := handler.NewImportHandler(mediaRepo, episodeRepo, cfg)
 	healthH   := handler.NewHealthHandler(cfg)
 	trendingH := handler.NewTrendingHandler(cfg)
+	rewatchH  := handler.NewRewatchHandler(rewatchRepo, mediaRepo)
 
 	r := chi.NewRouter()
 
@@ -116,6 +118,10 @@ func main() {
 				r.Put("/chapters", mediaH.UpsertChapter)
 				r.Delete("/chapters/{chID}", mediaH.DeleteChapter)
 				r.Post("/chapters/import", mediaH.ImportChapters)
+
+				// Rewatches
+				r.Get("/rewatches", rewatchH.List)
+				r.Post("/rewatches", rewatchH.Create)
 			})
 		})
 
@@ -143,6 +149,9 @@ func main() {
 			r.Get("/stats/summary", statsH.Summary)
 			r.Get("/trending/{category}", trendingH.Get)
 		})
+
+		// Rewatches (delete by rewatch ID)
+		r.Delete("/rewatches/{id}", rewatchH.Delete)
 
 		// Import
 		r.Post("/import/mal", importH.ImportMAL)
