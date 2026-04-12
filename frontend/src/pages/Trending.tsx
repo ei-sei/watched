@@ -203,7 +203,7 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
 
           {/* Synopsis */}
           {item.synopsis && (
-            <p className="text-xs text-zinc-400 leading-relaxed line-clamp-4">{item.synopsis}</p>
+            <p className="text-xs text-zinc-400 leading-relaxed max-h-36 overflow-y-auto">{item.synopsis}</p>
           )}
 
           {/* Confirm button */}
