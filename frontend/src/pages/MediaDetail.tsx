@@ -180,6 +180,7 @@ export default function MediaDetail() {
                       const today = new Date().toISOString().slice(0, 10)
                       const extra: Partial<MediaItem> = {}
                       if (s === 'completed' && !item.completed_at) extra.completed_at = today
+                      if (s === 'in_progress' && !item.started_at) extra.started_at = today
                       update.mutate({ id: item.id, data: { status: s, ...extra } })
                     }}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
@@ -203,6 +204,7 @@ export default function MediaDetail() {
               const today = new Date().toISOString().slice(0, 10)
               const extra: Partial<MediaItem> = {}
               if (s === 'completed' && !item.completed_at) extra.completed_at = today
+              if (s === 'in_progress' && !item.started_at) extra.started_at = today
               update.mutate({ id: item.id, data: { status: s, ...extra } })
             }}
             onClose={() => setSheetOpen(false)}
