@@ -347,11 +347,13 @@ export default function MediaDetail() {
 
           {/* Dates */}
           <div className="flex gap-6">
-            <DateField
-              label="Started"
-              value={item.started_at}
-              onChange={(val) => update.mutate({ id: item.id, data: { started_at: val } })}
-            />
+            {item.media_type !== 'film' && (
+              <DateField
+                label="Started"
+                value={item.started_at}
+                onChange={(val) => update.mutate({ id: item.id, data: { started_at: val } })}
+              />
+            )}
             <DateField
               label="Finished"
               value={item.completed_at}

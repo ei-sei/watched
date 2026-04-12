@@ -15,7 +15,7 @@ func NewRewatchRepo(db *pgxpool.Pool) *RewatchRepo { return &RewatchRepo{db: db}
 
 func (r *RewatchRepo) List(ctx context.Context, userID, mediaID int) ([]models.Rewatch, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, user_id, media_id, started_at, finished_at, created_at
+		`SELECT id, user_id, media_id, started_at::text, finished_at::text, created_at
 		 FROM rewatches WHERE user_id = $1 AND media_id = $2
 		 ORDER BY created_at DESC`,
 		userID, mediaID,
@@ -43,8 +43,8 @@ func (r *RewatchRepo) Create(ctx context.Context, userID, mediaID int, startedAt
 	rw := &models.Rewatch{}
 	err := r.db.QueryRow(ctx,
 		`INSERT INTO rewatches (user_id, media_id, started_at, finished_at)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, user_id, media_id, started_at, finished_at, created_at`,
+		 VALUES ($1, $2, $3::date, $4::date)
+		 RETURNING id, user_id, media_id, started_at::text, finished_at::text, created_at`,
 		userID, mediaID, startedAt, finishedAt,
 	).Scan(&rw.ID, &rw.UserID, &rw.MediaID, &rw.StartedAt, &rw.FinishedAt, &rw.CreatedAt)
 	if err != nil {
