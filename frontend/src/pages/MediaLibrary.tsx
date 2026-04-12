@@ -15,12 +15,17 @@ const STATUS_OPTIONS: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'com
 export default function MediaLibrary({ type }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
   const validStatuses: (MediaStatus | '')[] = ['', 'in_progress', 'want_to', 'completed', 'on_hold', 'dropped']
-  const paramStatus = searchParams.get('status') ?? 'all'
-  // 'all' in URL maps to '' (no filter), anything invalid defaults to ''
-  const status: MediaStatus | '' = paramStatus === 'all' ? '' : validStatuses.includes(paramStatus as MediaStatus | '') ? paramStatus as MediaStatus | '' : ''
+  const storageKey = `library_status_${type}`
+
+  // On first mount, restore last-used status from localStorage if no URL param is set
+  const paramStatus = searchParams.get('status')
+  const resolvedParam = paramStatus ?? localStorage.getItem(storageKey) ?? 'all'
+  const status: MediaStatus | '' = resolvedParam === 'all' ? '' : validStatuses.includes(resolvedParam as MediaStatus | '') ? resolvedParam as MediaStatus | '' : ''
 
   const setStatus = (value: MediaStatus | '') => {
-    setSearchParams({ status: value === '' ? 'all' : value }, { replace: true })
+    const urlValue = value === '' ? 'all' : value
+    localStorage.setItem(storageKey, urlValue)
+    setSearchParams({ status: urlValue }, { replace: true })
   }
 
   const [statusOpen, setStatusOpen] = useState(false)
