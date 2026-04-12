@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStats } from '@/hooks/useStats'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useAuth } from '@/hooks/useAuth'
@@ -12,7 +13,6 @@ function Sparkline({ data, colour, id }: { data: number[]; colour: string; id: s
     y: h - 4 - (v / max) * (h - 8),
   }))
 
-  // Smooth cubic bezier path
   const linePath = pts.reduce((path, pt, i) => {
     if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
     const prev = pts[i - 1]
@@ -36,6 +36,106 @@ function Sparkline({ data, colour, id }: { data: number[]; colour: string; id: s
       <path d={linePath} fill="none" stroke={colour} strokeWidth="1.5" />
       <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r="2.5" fill={colour} />
     </svg>
+  )
+}
+
+function RatingChart({ data }: { data: { rating: number; count: number }[] }) {
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  const maxCount = Math.max(...data.map(d => d.count), 1)
+  const niceMax = Math.ceil(maxCount / 5) * 5 || 5
+  const tickStep = niceMax <= 10 ? 2 : niceMax <= 25 ? 5 : 10
+  const ticks = Array.from(
+    { length: Math.floor(niceMax / tickStep) + 1 },
+    (_, i) => i * tickStep,
+  )
+
+  // SVG coordinate space
+  const W = 320, H = 160
+  const padL = 28, padR = 8, padT = 12, padB = 20
+  const chartW = W - padL - padR
+  const chartH = H - padT - padB
+  const barW = chartW / 10
+
+  const bars = Array.from({ length: 10 }, (_, i) => {
+    const rating = i + 1
+    const count = data.find(d => d.rating === rating)?.count ?? 0
+    const barH = (count / niceMax) * chartH
+    const x = padL + i * barW
+    const y = padT + chartH - barH
+    return { rating, count, x, y, barH }
+  })
+
+  // Smooth curve through bar midpoints
+  const curvePts = bars.map(b => ({
+    x: b.x + barW / 2,
+    y: b.count > 0 ? b.y : padT + chartH,
+  }))
+  const curvePath = curvePts.reduce((path, pt, i) => {
+    if (i === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+    const prev = curvePts[i - 1]
+    const cx = ((prev.x + pt.x) / 2).toFixed(1)
+    return `${path} C ${cx} ${prev.y.toFixed(1)}, ${cx} ${pt.y.toFixed(1)}, ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`
+  }, '')
+
+  const hoveredBar = hovered !== null ? bars.find(b => b.rating === hovered) : null
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 180 }}>
+        {/* Y-axis grid + labels */}
+        {ticks.map(tick => {
+          const y = padT + chartH - (tick / niceMax) * chartH
+          return (
+            <g key={tick}>
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
+              <text x={padL - 4} y={y + 3} textAnchor="end" fontSize="7" fill="#52525b">{tick}</text>
+            </g>
+          )
+        })}
+
+        {/* Bars */}
+        {bars.map(b => (
+          <rect
+            key={b.rating}
+            x={b.x + 2}
+            y={b.y}
+            width={barW - 4}
+            height={b.barH}
+            fill={hovered === b.rating ? 'rgba(139,92,246,0.55)' : 'rgba(99,102,241,0.3)'}
+            rx="2"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHovered(b.rating)}
+            onMouseLeave={() => setHovered(null)}
+          />
+        ))}
+
+        {/* Curve overlay */}
+        <path d={curvePath} fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeLinejoin="round" />
+
+        {/* X-axis labels */}
+        {bars.map(b => (
+          <text key={b.rating} x={b.x + barW / 2} y={H - 5} textAnchor="middle" fontSize="7" fill="#52525b">
+            {b.rating}
+          </text>
+        ))}
+      </svg>
+
+      {/* Tooltip */}
+      {hoveredBar && hoveredBar.count > 0 && (
+        <div
+          className="absolute pointer-events-none bg-[#111] ring-1 ring-white/10 rounded-md px-2.5 py-1.5 text-center"
+          style={{
+            left: `${((hoveredBar.x + barW / 2) / W) * 100}%`,
+            top: `${(hoveredBar.y / H) * 100}%`,
+            transform: 'translate(-50%, -115%)',
+          }}
+        >
+          <p className="text-white text-xs font-semibold leading-none">{hoveredBar.rating}</p>
+          <p className="text-zinc-400 text-[10px] mt-0.5">{hoveredBar.count} rated</p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -66,7 +166,7 @@ export default function Stats() {
           </div>
           <div className="flex items-center gap-2 text-zinc-600">
             <BarChart2 size={14} />
-            <span className="text-xs">Rating distribution · Monthly activity · Streaks</span>
+            <span className="text-xs">Rating distribution · Streaks · Activity</span>
           </div>
         </div>
       </div>
@@ -79,15 +179,6 @@ export default function Stats() {
   const totalItems = s.films.total + s.tv_shows.total + s.books.total + s.anime.total
   const ratingDist = s.rating_distribution ?? []
   const monthlyActivity = s.monthly_activity ?? []
-  const maxRatingCount = Math.max(...ratingDist.map(b => b.count), 1)
-  const maxMonthTotal = Math.max(...monthlyActivity.map(m => m.films + m.tv + m.books + m.anime), 1)
-
-  const CATEGORY_SEGMENTS = [
-    { key: 'anime' as const, colour: 'bg-pink-400',    label: 'Anime'    },
-    { key: 'books' as const, colour: 'bg-emerald-400', label: 'Books'    },
-    { key: 'tv'    as const, colour: 'bg-purple-400',  label: 'TV'       },
-    { key: 'films' as const, colour: 'bg-blue-400',    label: 'Movies'   },
-  ]
 
   const parseMonth = (m: string) => {
     const [y, mo] = m.split('-')
@@ -141,15 +232,15 @@ export default function Stats() {
 
       {/* Top summary row */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] col-span-1">
+        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06]">
           <p className="text-3xl font-bold text-white tabular-nums">{totalItems}</p>
           <p className="text-xs text-zinc-500 mt-0.5">Total in library</p>
         </div>
-        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] col-span-1">
+        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06]">
           <p className="text-3xl font-bold text-indigo-400 tabular-nums">{formatTime(s.estimated_minutes)}</p>
           <p className="text-xs text-zinc-500 mt-0.5">Time spent</p>
         </div>
-        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] col-span-1">
+        <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06]">
           <p className="text-3xl font-bold text-amber-400 tabular-nums">
             {s.completion_rate > 0 ? Math.round(s.completion_rate * 100) : 0}%
           </p>
@@ -200,76 +291,9 @@ export default function Stats() {
       {ratingDist.length > 0 && (
         <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
           <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Rating distribution</p>
-          <div className="flex items-end gap-1.5 h-20">
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((r) => {
-              const bucket = ratingDist.find(b => b.rating === r)
-              const count = bucket?.count ?? 0
-              const height = count > 0 ? Math.max((count / maxRatingCount) * 100, 8) : 0
-              return (
-                <div key={r} className="flex-1 flex flex-col items-center gap-1">
-                  {count > 0 && (
-                    <span className="text-[9px] text-zinc-600 tabular-nums">{count}</span>
-                  )}
-                  <div className="w-full flex items-end" style={{ height: '64px' }}>
-                    <div
-                      className="w-full rounded-sm bg-indigo-500/60 transition-all"
-                      style={{ height: `${height}%` }}
-                    />
-                  </div>
-                  <span className="text-[9px] text-zinc-600">{r}</span>
-                </div>
-              )
-            })}
-          </div>
+          <RatingChart data={ratingDist} />
         </div>
       )}
-
-      {/* Monthly activity — stacked bar chart */}
-      <div className="bg-[#1a1a1a] rounded-xl p-4 ring-1 ring-white/[0.06] space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">Monthly activity</p>
-          <div className="flex items-center gap-3">
-            {CATEGORY_SEGMENTS.slice().reverse().map(({ key, colour, label }) => (
-              <span key={key} className="flex items-center gap-1">
-                <span className={`w-2 h-2 rounded-full ${colour}`} />
-                <span className="text-[10px] text-zinc-500">{label}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-        {monthlyActivity.length === 0 ? (
-          <p className="text-xs text-zinc-600 py-4 text-center">No activity data yet</p>
-        ) : (
-          <div className="flex items-end gap-1 h-20">
-            {monthlyActivity.map((m) => {
-              const total = m.films + m.tv + m.books + m.anime
-              const barPct = total > 0 ? Math.max((total / maxMonthTotal) * 100, 6) : 0
-              const [y, mo] = m.month.split('-')
-              const label = new Date(Number(y), Number(mo) - 1).toLocaleString('default', { month: 'short' })
-              return (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-                  {total > 0 && (
-                    <span className="text-[9px] text-zinc-600 tabular-nums">{total}</span>
-                  )}
-                  <div className="w-full flex flex-col-reverse overflow-hidden rounded-sm" style={{ height: '64px' }}>
-                    {CATEGORY_SEGMENTS.map(({ key, colour }) => {
-                      const segPct = total > 0 ? (m[key] / total) * barPct : 0
-                      return segPct > 0 ? (
-                        <div
-                          key={key}
-                          className={`w-full ${colour} opacity-70 transition-all`}
-                          style={{ height: `${segPct}%` }}
-                        />
-                      ) : null
-                    })}
-                  </div>
-                  <span className="text-[9px] text-zinc-600">{label}</span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
 
       {totalItems === 0 && (
         <p className="text-zinc-600 text-sm text-center py-12">Nothing in your library yet — start adding some!</p>
