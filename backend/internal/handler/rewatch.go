@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/ei-sei/brsti/internal/auth"
 	"github.com/ei-sei/brsti/internal/repository"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type RewatchHandler struct {
@@ -66,6 +68,11 @@ func (h *RewatchHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	rw, err := h.rewatches.Create(r.Context(), userID, id, body.StartedAt, body.FinishedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			jsonErr(w, http.StatusConflict, "already logged for this date")
+			return
+		}
 		jsonErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
