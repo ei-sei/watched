@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocalMediaItem } from '@/hooks/useLocalMedia'
@@ -38,27 +38,32 @@ function DateField({ label, value, onChange }: {
   onChange: (val: string | null) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState('')
 
-  useEffect(() => {
-    if (editing) inputRef.current?.showPicker?.()
-  }, [editing])
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (!trimmed) {
+      onChange(null)
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      onChange(trimmed)
+    }
+    setEditing(false)
+  }
 
   if (editing) {
     return (
       <div>
         <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">{label}</p>
         <input
-          ref={inputRef}
-          type="date"
-          defaultValue={value ?? ''}
+          type="text"
+          inputMode="numeric"
+          value={draft}
+          placeholder="YYYY-MM-DD"
           autoFocus
-          onChange={(e) => {
-            onChange(e.target.value || null)
-            setEditing(false)
-          }}
-          onBlur={() => setEditing(false)}
-          className="bg-white/[0.04] text-zinc-300 text-sm rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit() }}
+          className="bg-white/[0.04] text-zinc-300 text-sm rounded-md px-3 py-1.5 w-36 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 placeholder:text-zinc-700"
         />
       </div>
     )
@@ -68,7 +73,7 @@ function DateField({ label, value, onChange }: {
     <div>
       <p className="text-xs text-zinc-600 uppercase tracking-wider mb-1">{label}</p>
       <button
-        onClick={() => setEditing(true)}
+        onClick={() => { setDraft(value ?? ''); setEditing(true) }}
         className="text-sm text-zinc-400 hover:text-white transition-colors"
       >
         {value ? formatDate(value) : <span className="text-zinc-700">Add date</span>}
