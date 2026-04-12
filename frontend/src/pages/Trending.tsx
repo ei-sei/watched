@@ -8,16 +8,12 @@ import { useToast } from '@/components/ui/Toast'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { db } from '@/offline/db'
 import { Lock, TrendingUp, X } from 'lucide-react'
-import { STATUS_LABELS, STATUS_COLOURS } from '@/utils/constants'
-import type { MediaStatus } from '@/types/media'
 
 const TABS: { key: TrendingCategory; label: string }[] = [
   { key: 'anime',  label: 'Anime'    },
   { key: 'movies', label: 'Movies'   },
   { key: 'tv',     label: 'TV Shows' },
 ]
-
-const STATUSES: MediaStatus[] = ['want_to', 'in_progress', 'completed', 'on_hold', 'dropped']
 
 export default function Trending() {
   const { user } = useAuth()
@@ -140,7 +136,6 @@ function PosterCard({ item, onSelect }: { item: TrendingItem; onSelect: (item: T
 }
 
 function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }) {
-  const [status, setStatus] = useState<MediaStatus>('want_to')
   const create = useCreateMedia()
   const { show } = useToast()
   const navigate = useNavigate()
@@ -161,7 +156,7 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
         title: item.title,
         year: item.year || undefined,
         poster_url: item.poster || undefined,
-        status,
+        status: 'want_to',
       })
       show(`"${item.title}" added`, 'success')
       onClose()
@@ -206,29 +201,10 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
             </button>
           )}
 
-          {/* Status picker */}
-          <div className="space-y-2">
-            <p className="text-xs text-zinc-600 uppercase tracking-wider">Add as</p>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUSES.map((s) => {
-                const active = status === s
-                const colours = STATUS_COLOURS[s] ?? 'bg-zinc-700 text-zinc-300'
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setStatus(s)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                      active
-                        ? colours
-                        : 'bg-transparent text-zinc-600 hover:text-zinc-400 border border-white/[0.06] hover:border-white/[0.12]'
-                    }`}
-                  >
-                    {STATUS_LABELS[s]}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          {/* Synopsis */}
+          {item.synopsis && (
+            <p className="text-xs text-zinc-400 leading-relaxed line-clamp-4">{item.synopsis}</p>
+          )}
 
           {/* Confirm button */}
           <button
