@@ -43,7 +43,7 @@ function RatingChart({ data }: { data: { rating: number; count: number }[] }) {
   const [hovered, setHovered] = useState<number | null>(null)
 
   const maxCount = Math.max(...data.map(d => d.count), 1)
-  const niceMax = Math.ceil(maxCount / 5) * 5 || 5
+  const niceMax = Math.ceil((maxCount + 1) / 5) * 5 || 5
   const tickStep = niceMax <= 10 ? 2 : niceMax <= 25 ? 5 : 10
   const ticks = Array.from(
     { length: Math.floor(niceMax / tickStep) + 1 },
