@@ -172,8 +172,8 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4">
-      <div className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-xl w-full sm:max-w-sm ring-1 ring-white/[0.08] overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4" onClick={onClose}>
+      <div className="bg-[#1a1a1a] rounded-t-2xl sm:rounded-xl w-full sm:max-w-sm ring-1 ring-white/[0.08] overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-start gap-3 p-4 border-b border-white/[0.06]">
           {item.poster ? (
