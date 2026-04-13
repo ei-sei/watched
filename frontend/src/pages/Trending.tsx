@@ -94,7 +94,7 @@ function TrendingRow({ section, onSelect }: { section: TrendingSection; onSelect
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{section.label}</p>
       {/* Mobile: horizontal scroll — Desktop: wrapping grid */}
-      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:flex-wrap md:overflow-x-visible">
+      <div className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:grid md:grid-cols-7 md:overflow-x-visible">
         {section.items.map(item => (
           <PosterCard key={item.id} item={item} onSelect={onSelect} />
         ))}
@@ -107,7 +107,7 @@ function PosterCard({ item, onSelect }: { item: TrendingItem; onSelect: (item: T
   return (
     <button
       onClick={() => onSelect(item)}
-      className="flex-none w-[88px] text-left group"
+      className="flex-none w-[88px] md:w-full text-left group"
     >
       <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-white/[0.04] ring-1 ring-white/[0.06] group-hover:ring-indigo-500/40 transition-all">
         {item.poster ? (
