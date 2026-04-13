@@ -50,9 +50,9 @@ function RatingChart({ data }: { data: { rating: number; count: number }[] }) {
     (_, i) => i * tickStep,
   )
 
-  // SVG coordinate space
-  const W = 400, H = 130
-  const padL = 28, padR = 6, padT = 10, padB = 18
+  // SVG coordinate space — padT is generous so the tooltip on the tallest bar isn't clipped
+  const W = 400, H = 150
+  const padL = 28, padR = 6, padT = 30, padB = 18
   const chartW = W - padL - padR
   const chartH = H - padT - padB
   const barW = chartW / 10
