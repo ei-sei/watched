@@ -16,6 +16,6 @@ COPY . .
 RUN npm run build
 
 # Production — Nginx serves the built files (see nginx service)
-FROM nginx:1.25-alpine AS production
+FROM nginx:alpine AS production
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
