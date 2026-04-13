@@ -74,23 +74,23 @@ function ImportCard() {
   const [lastResult, setLastResult] = useState<{ service: string; imported: number; skipped: number } | null>(null)
   const [missingCount, setMissingCount] = useState<number | null>(null)
   const [refetching, setRefetching] = useState(false)
-  const [posterProgress, setPosterProgress] = useState<{ current: number; total: number } | null>(null)
+  const [metaProgress, setMetaProgress] = useState<{ current: number; total: number } | null>(null)
   const [allCaughtUp, setAllCaughtUp] = useState(false)
   const rawProgress = useImportProgress(importing)
   const displayProgress = importing ? rawProgress : lastResult ? 100 : 0
 
   useEffect(() => {
-    client.get('/import/posters/missing-count')
+    client.get('/import/metadata/missing-count')
       .then(({ data }) => setMissingCount(data.count))
       .catch(() => {})
   }, [])
 
-  const refetchPosters = async () => {
+  const refetchMetadata = async () => {
     setRefetching(true)
-    setPosterProgress(null)
+    setMetaProgress(null)
     setAllCaughtUp(false)
     try {
-      const { data } = await client.post('/import/posters/refetch')
+      const { data } = await client.post('/import/metadata/refetch')
       if (data.queued === 0) {
         setMissingCount(0)
         setAllCaughtUp(true)
@@ -98,30 +98,36 @@ function ImportCard() {
         return
       }
       const total: number = data.queued
-      // Backend processes at 700ms/item — match the timer so UI doesn't
-      // finish before the goroutine does, causing a stale count re-check.
-      const msPerItem = 700
-      const startedAt = Date.now()
-      setMissingCount(0) // optimistically clear while fetch runs
-      setPosterProgress({ current: 0, total })
+      setMetaProgress({ current: 0, total })
+      // Poll the missing-count endpoint every 3s to track real progress.
+      // Give up after total * 2s + 20s to handle items that can't be fetched.
+      const deadline = Date.now() + total * 2000 + 20000
+      let lastCount = total
+      let staleTicks = 0
       const id = setInterval(async () => {
-        const elapsed = Date.now() - startedAt
-        const estimated = Math.min(Math.floor(elapsed / msPerItem), total)
-        setPosterProgress({ current: estimated, total })
-        if (estimated >= total) {
-          clearInterval(id)
-          // Add a small buffer then verify with server how many are still missing
-          await new Promise(r => setTimeout(r, 1500))
-          try {
-            const { data: check } = await client.get('/import/posters/missing-count')
-            setMissingCount(check.count)
-            if (check.count === 0) setAllCaughtUp(true)
-          } catch { /* ignore */ }
-          setRefetching(false)
-        }
-      }, msPerItem)
+        try {
+          const { data: check } = await client.get('/import/metadata/missing-count')
+          const done = Math.max(0, total - check.count)
+          setMetaProgress({ current: done, total })
+          setMissingCount(check.count)
+          if (check.count === 0) {
+            clearInterval(id)
+            setAllCaughtUp(true)
+            setRefetching(false)
+            return
+          }
+          // Stop if count hasn't changed for 3 consecutive polls or deadline passed
+          if (check.count === lastCount) staleTicks++
+          else staleTicks = 0
+          lastCount = check.count
+          if (staleTicks >= 3 || Date.now() >= deadline) {
+            clearInterval(id)
+            setRefetching(false)
+          }
+        } catch { /* network hiccup — keep polling */ }
+      }, 3000)
     } catch {
-      show('Failed to start poster fetch', 'error')
+      show('Failed to start metadata fetch', 'error')
       setRefetching(false)
     }
   }
@@ -195,37 +201,37 @@ function ImportCard() {
       <div className="border-t border-white/[0.05] pt-3 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-zinc-300">Fetch missing posters</p>
+            <p className="text-sm text-zinc-300">Fetch metadata</p>
             <p className="text-xs text-zinc-600 mt-0.5">
               {allCaughtUp
-                ? 'All posters are up to date.'
+                ? 'All metadata is up to date.'
                 : missingCount === null
-                  ? 'Re-runs poster lookup for anime imported without one.'
+                  ? 'Fills in missing posters, years, and episode/page counts across all types.'
                   : missingCount === 0
-                    ? 'All posters are up to date.'
-                    : `${missingCount} anime ${missingCount === 1 ? 'is' : 'are'} missing a poster.`}
+                    ? 'All metadata is up to date.'
+                    : `${missingCount} ${missingCount === 1 ? 'item is' : 'items are'} missing metadata.`}
             </p>
           </div>
           <button
-            onClick={refetchPosters}
+            onClick={refetchMetadata}
             disabled={refetching || importing || allCaughtUp || missingCount === 0}
             className="flex-shrink-0 px-3 py-1.5 text-xs rounded-md text-zinc-300 bg-white/8 hover:bg-white/12 transition-colors disabled:opacity-40"
           >
             {refetching ? 'Fetching…' : 'Fetch'}
           </button>
         </div>
-        {posterProgress && (
+        {metaProgress && (
           <div className="space-y-1">
             <div className="w-full bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
               <div
                 className="h-full bg-indigo-500 rounded-full transition-all duration-300"
-                style={{ width: `${(posterProgress.current / posterProgress.total) * 100}%` }}
+                style={{ width: `${(metaProgress.current / metaProgress.total) * 100}%` }}
               />
             </div>
             <p className="text-xs text-zinc-500">
-              {posterProgress.current < posterProgress.total
-                ? `${posterProgress.current} / ${posterProgress.total} posters fetched…`
-                : `Done — fetched ${posterProgress.total} posters`}
+              {metaProgress.current < metaProgress.total
+                ? `${metaProgress.current} / ${metaProgress.total} updated…`
+                : `Done — updated ${metaProgress.total} items`}
             </p>
           </div>
         )}

@@ -534,6 +534,451 @@ func (h *ImportHandler) googleBooksPoster(ctx context.Context, title string) *st
 	return &s
 }
 
+// ── Metadata enrichment (all types) ───────────────────────────────────────────
+
+// GET /import/metadata/missing-count
+func (h *ImportHandler) MissingMetadataCount(w http.ResponseWriter, r *http.Request) {
+	userID := auth.ClaimsFrom(r.Context()).UserID
+	items, err := h.media.GetMissingMetadata(r.Context(), userID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "failed to query missing metadata")
+		return
+	}
+	jsonOK(w, map[string]int{"count": len(items)})
+}
+
+// POST /import/metadata/refetch
+// Queues a background enrichment pass for all items missing poster, year, or
+// total_progress. Returns {queued: N} immediately.
+func (h *ImportHandler) RefetchMetadata(w http.ResponseWriter, r *http.Request) {
+	userID := auth.ClaimsFrom(r.Context()).UserID
+	items, err := h.media.GetMissingMetadata(r.Context(), userID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "failed to query missing metadata")
+		return
+	}
+	jsonOK(w, map[string]int{"queued": len(items)})
+	if len(items) > 0 {
+		go h.enrichAllMeta(context.Background(), items)
+	}
+}
+
+// enrichAllMeta runs in a background goroutine. Items are processed per type
+// at their respective safe rate limits.
+func (h *ImportHandler) enrichAllMeta(ctx context.Context, items []repository.MissingMetadataItem) {
+	for _, item := range items {
+		switch item.MediaType {
+		case "anime":
+			h.enrichAnimeMeta(ctx, item)
+			time.Sleep(700 * time.Millisecond) // AniList: 90 req/min
+		case "film":
+			h.enrichFilmMeta(ctx, item)
+			time.Sleep(300 * time.Millisecond)
+		case "tv_show":
+			h.enrichTVMeta(ctx, item)
+			time.Sleep(300 * time.Millisecond)
+		case "book":
+			h.enrichBookMeta(ctx, item)
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+}
+
+// enrichAnimeMeta fetches poster + episode count for an anime item via AniList/Jikan.
+func (h *ImportHandler) enrichAnimeMeta(ctx context.Context, item repository.MissingMetadataItem) {
+	malID := 0
+	if item.Metadata != nil {
+		switch v := item.Metadata["mal_id"].(type) {
+		case float64:
+			malID = int(v)
+		case int:
+			malID = v
+		}
+	}
+	if malID == 0 {
+		return
+	}
+
+	in := repository.UpdateMediaInput{}
+
+	// Poster
+	if item.IsPosterMissing() {
+		poster := h.anilistPoster(ctx, malID)
+		if poster == nil {
+			poster = h.jikanPoster(ctx, malID)
+		}
+		in.PosterURL = poster
+	}
+
+	// Episodes from AniList
+	if item.TotalProgress == nil {
+		episodes := h.anilistEpisodes(ctx, malID)
+		if episodes != nil && *episodes > 0 {
+			in.TotalProgress = episodes
+		}
+	}
+
+	if in.PosterURL != nil || in.TotalProgress != nil {
+		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+	}
+}
+
+// enrichFilmMeta fetches poster + year for a film via TMDB.
+func (h *ImportHandler) enrichFilmMeta(ctx context.Context, item repository.MissingMetadataItem) {
+	if h.cfg.TMDBKey == "" {
+		return
+	}
+	var poster *string
+	var year *int
+
+	tmdbID := tmdbIntID(item.ExternalID)
+	if tmdbID > 0 {
+		poster, year = h.tmdbMovieByID(ctx, tmdbID)
+	} else {
+		poster = h.tmdbPoster(ctx, item.Title, item.Year)
+	}
+
+	in := repository.UpdateMediaInput{}
+	if item.IsPosterMissing() {
+		in.PosterURL = poster
+	}
+	if item.Year == nil && year != nil {
+		in.Year = year
+	}
+	if in.PosterURL != nil || in.Year != nil {
+		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+	}
+}
+
+// enrichTVMeta fetches poster + year + episode count for a TV show via TMDB.
+func (h *ImportHandler) enrichTVMeta(ctx context.Context, item repository.MissingMetadataItem) {
+	if h.cfg.TMDBKey == "" {
+		return
+	}
+	var poster *string
+	var year *int
+	var episodes *int
+
+	tmdbID := tmdbIntID(item.ExternalID)
+	if tmdbID > 0 {
+		poster, year, episodes = h.tmdbTVByID(ctx, tmdbID)
+	} else {
+		poster, year, episodes = h.tmdbTVSearch(ctx, item.Title, item.Year)
+	}
+
+	in := repository.UpdateMediaInput{}
+	if item.IsPosterMissing() {
+		in.PosterURL = poster
+	}
+	if item.Year == nil && year != nil {
+		in.Year = year
+	}
+	if item.TotalProgress == nil && episodes != nil && *episodes > 0 {
+		in.TotalProgress = episodes
+	}
+	if in.PosterURL != nil || in.Year != nil || in.TotalProgress != nil {
+		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+	}
+}
+
+// enrichBookMeta fetches poster + year + page count for a book via Google Books.
+func (h *ImportHandler) enrichBookMeta(ctx context.Context, item repository.MissingMetadataItem) {
+	var poster *string
+	var year *int
+	var pages *int
+
+	gbID := googleBooksVolumeID(item.ExternalID)
+	if gbID != "" {
+		poster, year, pages = h.googleBooksByID(ctx, gbID)
+	} else {
+		poster, year, pages = h.googleBooksByTitle(ctx, item.Title)
+	}
+
+	in := repository.UpdateMediaInput{}
+	if item.IsPosterMissing() {
+		in.PosterURL = poster
+	}
+	if item.Year == nil && year != nil {
+		in.Year = year
+	}
+	if item.TotalProgress == nil && pages != nil && *pages > 0 {
+		in.TotalProgress = pages
+	}
+	if in.PosterURL != nil || in.Year != nil || in.TotalProgress != nil {
+		_, _ = h.media.Update(ctx, item.ID, item.UserID, in)
+	}
+}
+
+// ── Per-source fetch helpers ───────────────────────────────────────────────────
+
+func (h *ImportHandler) anilistEpisodes(ctx context.Context, malID int) *int {
+	body := fmt.Sprintf(
+		`{"query":"query($id:Int){Media(idMal:$id,type:ANIME){episodes}}","variables":{"id":%d}}`,
+		malID,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://graphql.anilist.co", strings.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return nil
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Data struct {
+			Media struct {
+				Episodes *int `json:"episodes"`
+			} `json:"Media"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil
+	}
+	return result.Data.Media.Episodes
+}
+
+func (h *ImportHandler) tmdbMovieByID(ctx context.Context, tmdbID int) (poster *string, year *int) {
+	u := fmt.Sprintf("https://api.themoviedb.org/3/movie/%d?api_key=%s", tmdbID, h.cfg.TMDBKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		PosterPath  *string `json:"poster_path"`
+		ReleaseDate string  `json:"release_date"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return
+	}
+	if raw.PosterPath != nil {
+		s := "https://image.tmdb.org/t/p/w500" + *raw.PosterPath
+		poster = &s
+	}
+	if len(raw.ReleaseDate) >= 4 {
+		var y int
+		fmt.Sscanf(raw.ReleaseDate[:4], "%d", &y)
+		if y > 0 {
+			year = &y
+		}
+	}
+	return
+}
+
+func (h *ImportHandler) tmdbTVByID(ctx context.Context, tmdbID int) (poster *string, year *int, episodes *int) {
+	u := fmt.Sprintf("https://api.themoviedb.org/3/tv/%d?api_key=%s", tmdbID, h.cfg.TMDBKey)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		PosterPath       *string `json:"poster_path"`
+		FirstAirDate     string  `json:"first_air_date"`
+		NumberOfEpisodes *int    `json:"number_of_episodes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return
+	}
+	if raw.PosterPath != nil {
+		s := "https://image.tmdb.org/t/p/w500" + *raw.PosterPath
+		poster = &s
+	}
+	if len(raw.FirstAirDate) >= 4 {
+		var y int
+		fmt.Sscanf(raw.FirstAirDate[:4], "%d", &y)
+		if y > 0 {
+			year = &y
+		}
+	}
+	episodes = raw.NumberOfEpisodes
+	return
+}
+
+func (h *ImportHandler) tmdbTVSearch(ctx context.Context, title string, year *int) (poster *string, yearOut *int, episodes *int) {
+	u := fmt.Sprintf("https://api.themoviedb.org/3/search/tv?api_key=%s&query=%s",
+		h.cfg.TMDBKey, url.QueryEscape(title))
+	if year != nil {
+		u += fmt.Sprintf("&first_air_date_year=%d", *year)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		Results []struct {
+			ID         int     `json:"id"`
+			PosterPath *string `json:"poster_path"`
+			FirstAirDate string `json:"first_air_date"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || len(raw.Results) == 0 {
+		return
+	}
+	r := raw.Results[0]
+	if r.PosterPath != nil {
+		s := "https://image.tmdb.org/t/p/w500" + *r.PosterPath
+		poster = &s
+	}
+	if len(r.FirstAirDate) >= 4 {
+		var y int
+		fmt.Sscanf(r.FirstAirDate[:4], "%d", &y)
+		if y > 0 {
+			yearOut = &y
+		}
+	}
+	// Fetch episode count via detail endpoint
+	_, _, episodes = h.tmdbTVByID(ctx, r.ID)
+	time.Sleep(200 * time.Millisecond) // second TMDB call
+	return
+}
+
+func (h *ImportHandler) googleBooksByID(ctx context.Context, gbID string) (poster *string, year *int, pages *int) {
+	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes/%s", url.PathEscape(gbID))
+	if h.cfg.GoogleBooksKey != "" {
+		apiURL += "?key=" + h.cfg.GoogleBooksKey
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		VolumeInfo struct {
+			PublishedDate string `json:"publishedDate"`
+			PageCount     *int   `json:"pageCount"`
+			ImageLinks    *struct {
+				Thumbnail string `json:"thumbnail"`
+			} `json:"imageLinks"`
+		} `json:"volumeInfo"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return
+	}
+	vi := raw.VolumeInfo
+	if vi.ImageLinks != nil {
+		s := strings.Replace(vi.ImageLinks.Thumbnail, "http://", "https://", 1)
+		poster = &s
+	}
+	if len(vi.PublishedDate) >= 4 {
+		var y int
+		fmt.Sscanf(vi.PublishedDate[:4], "%d", &y)
+		if y > 0 {
+			year = &y
+		}
+	}
+	pages = vi.PageCount
+	return
+}
+
+func (h *ImportHandler) googleBooksByTitle(ctx context.Context, title string) (poster *string, year *int, pages *int) {
+	apiURL := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=1", url.QueryEscape(title))
+	if h.cfg.GoogleBooksKey != "" {
+		apiURL += "&key=" + h.cfg.GoogleBooksKey
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return
+	}
+	resp, err := h.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return
+	}
+	defer resp.Body.Close()
+	var raw struct {
+		Items []struct {
+			ID         string `json:"id"`
+			VolumeInfo struct {
+				PublishedDate string `json:"publishedDate"`
+				PageCount     *int   `json:"pageCount"`
+				ImageLinks    *struct {
+					Thumbnail string `json:"thumbnail"`
+				} `json:"imageLinks"`
+			} `json:"volumeInfo"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil || len(raw.Items) == 0 {
+		return
+	}
+	vi := raw.Items[0].VolumeInfo
+	if vi.ImageLinks != nil {
+		s := strings.Replace(vi.ImageLinks.Thumbnail, "http://", "https://", 1)
+		poster = &s
+	}
+	if len(vi.PublishedDate) >= 4 {
+		var y int
+		fmt.Sscanf(vi.PublishedDate[:4], "%d", &y)
+		if y > 0 {
+			year = &y
+		}
+	}
+	pages = vi.PageCount
+	return
+}
+
+// tmdbIntID extracts the integer ID from an external_id like "tmdb:12345".
+func tmdbIntID(externalID *string) int {
+	if externalID == nil {
+		return 0
+	}
+	s := *externalID
+	if !strings.HasPrefix(s, "tmdb:") {
+		return 0
+	}
+	var id int
+	fmt.Sscanf(strings.TrimPrefix(s, "tmdb:"), "%d", &id)
+	return id
+}
+
+// googleBooksVolumeID extracts the volume ID from an external_id like "gb:AbCdEf".
+func googleBooksVolumeID(externalID *string) string {
+	if externalID == nil {
+		return ""
+	}
+	s := *externalID
+	if !strings.HasPrefix(s, "gb:") {
+		return ""
+	}
+	return strings.TrimPrefix(s, "gb:")
+}
+
 // ── Letterboxd CSV import ──────────────────────────────────────────────────────
 
 // POST /import/letterboxd  (multipart, field: "file")
