@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -77,13 +78,18 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		all = []models.SearchResult{}
 	}
 
-	// When doing an unfiltered search, TMDB TV results and Jikan anime results
-	// overlap. Deduplicate by dropping TMDB TV entries whose title matches a
-	// Jikan result — Jikan is the authoritative source for anime.
-	if mediaType == "" {
+	// Deduplication pass — runs for unfiltered searches and whenever both
+	// affected types are included.
+	//
+	// 1. TMDB TV vs Jikan/AniList anime: drop TMDB TV entries whose title
+	//    matches an anime result — Jikan/AniList is the authoritative source.
+	// 2. OpenLibrary vs Google Books: drop OpenLibrary entries whose title+first
+	//    author matches a Google Books entry — Google Books has richer metadata
+	//    (descriptions, page counts).
+	if mediaType == "" || mediaType == string(models.MediaTypeTVShow) || mediaType == string(models.MediaTypeAnime) {
 		animeTitles := make(map[string]struct{})
 		for _, r := range all {
-			if r.Source == "jikan" {
+			if r.Source == "jikan" || r.Source == "anilist" {
 				animeTitles[normTitle(r.Title)] = struct{}{}
 			}
 		}
@@ -92,6 +98,27 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			for _, r := range all {
 				if r.Source == "tmdb" && r.MediaType == string(models.MediaTypeTVShow) {
 					if _, dup := animeTitles[normTitle(r.Title)]; dup {
+						continue
+					}
+				}
+				filtered = append(filtered, r)
+			}
+			all = filtered
+		}
+	}
+	if mediaType == "" || mediaType == string(models.MediaTypeBook) {
+		// Build a set of "title|firstAuthor" keys from Google Books results.
+		gbKeys := make(map[string]struct{})
+		for _, r := range all {
+			if r.Source == "googlebooks" {
+				gbKeys[bookKey(r)] = struct{}{}
+			}
+		}
+		if len(gbKeys) > 0 {
+			filtered := all[:0]
+			for _, r := range all {
+				if r.Source == "openlibrary" {
+					if _, dup := gbKeys[bookKey(r)]; dup {
 						continue
 					}
 				}
@@ -464,12 +491,17 @@ func (h *SearchHandler) searchAniList(ctx context.Context, q string) ([]models.S
 }
 
 // rankResults sorts results so that:
-//  1. Exact title matches come first
-//  2. Prefix matches come next
-//  3. Higher popularity / score ranks higher within each tier
+//  1. Exact title matches come first, then prefix, then contains
+//  2. Within each tier, popularity ranks higher — but normalised so no single
+//     source dominates (TMDB raw popularity is log-scaled, anime/book scores
+//     are already 0–100)
+//  3. Extra unmatched words in the title are lightly penalised so tighter
+//     matches beat longer ones at the same tier
 //  4. Results missing a poster are pushed to the bottom within their tier
 func rankResults(results []models.SearchResult, q string) {
 	qNorm := normTitle(q)
+	qWords := len(strings.Fields(qNorm))
+
 	score := func(r models.SearchResult) float64 {
 		t := normTitle(r.Title)
 		var s float64
@@ -481,7 +513,27 @@ func rankResults(results []models.SearchResult, q string) {
 		case strings.Contains(t, qNorm):
 			s = 1000
 		}
-		s += r.Popularity
+
+		// Normalise popularity to a 0–100 range regardless of source.
+		// TMDB popularity is open-ended (blockbusters > 1000), so log-scale it.
+		// AniList/Jikan scores are already 0–100. Books have no popularity so
+		// they stay at 0 here — title match tier is the only signal for them.
+		var pop float64
+		switch r.Source {
+		case "tmdb":
+			pop = math.Log1p(r.Popularity) * 10 // log1p(1000)≈69 → ×10 = 69
+		default:
+			pop = r.Popularity // AniList/Jikan already in 0–100 range
+		}
+		s += pop
+
+		// Penalise extra words beyond the query length so "Godfather" ranks
+		// above "Godfather Part II" when you searched for "Godfather".
+		tWords := len(strings.Fields(t))
+		if extra := tWords - qWords; extra > 0 {
+			s -= float64(extra) * 5
+		}
+
 		if r.PosterURL == nil || *r.PosterURL == "" {
 			s -= 500
 		}
@@ -494,6 +546,28 @@ func rankResults(results []models.SearchResult, q string) {
 			results[j], results[j-1] = results[j-1], results[j]
 		}
 	}
+}
+
+// bookKey returns a normalised "title|firstAuthor" string used to detect
+// duplicate book results across OpenLibrary and Google Books.
+func bookKey(r models.SearchResult) string {
+	title := normTitle(r.Title)
+	author := ""
+	if authors, ok := r.Extra["authors"]; ok {
+		switch v := authors.(type) {
+		case []string:
+			if len(v) > 0 {
+				author = normTitle(v[0])
+			}
+		case []any:
+			if len(v) > 0 {
+				if s, ok := v[0].(string); ok {
+					author = normTitle(s)
+				}
+			}
+		}
+	}
+	return title + "|" + author
 }
 
 // normTitle lowercases and strips common punctuation for loose title matching.
