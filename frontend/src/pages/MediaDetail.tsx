@@ -368,7 +368,6 @@ export default function MediaDetail() {
 
       {(item.media_type === 'book' || item.media_type === 'tv_show' || item.media_type === 'anime') && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Progress</h3>
           {(item.media_type === 'tv_show' || item.media_type === 'anime') ? (
             <TVSeasonProgress item={item} />
           ) : (
