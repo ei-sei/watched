@@ -6,12 +6,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/ei-sei/brsti/internal/config"
 	"github.com/go-chi/chi/v5"
 )
+
+var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
+
+func stripHTML(s string) string {
+	s = htmlTagRe.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "&amp;", "&")
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&quot;", `"`)
+	s = strings.ReplaceAll(s, "&#39;", "'")
+	s = strings.TrimSpace(s)
+	return s
+}
 
 type TrendingItem struct {
 	ID          int     `json:"id"`
@@ -158,7 +173,7 @@ func (h *TrendingHandler) fetchTMDB(ctx context.Context, mediaType string) ([]Tr
 			Year:       year,
 			ExternalID: fmt.Sprintf("tmdb:%d", r.ID),
 			MediaType:  appType,
-			Synopsis:   r.Overview,
+			Synopsis:   stripHTML(r.Overview),
 		})
 	}
 
@@ -268,7 +283,7 @@ func mapAniListItems(media []aniListMedia) []TrendingItem {
 			Year:       m.StartDate.Year,
 			ExternalID: extID,
 			MediaType:  "anime",
-			Synopsis:   m.Description,
+			Synopsis:   stripHTML(m.Description),
 		})
 	}
 	return items
