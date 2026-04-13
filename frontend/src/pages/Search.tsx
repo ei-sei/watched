@@ -1,10 +1,13 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useSearch } from '@/hooks/useSearch'
 import { useCreateMedia } from '@/hooks/useMedia'
 import { useToast } from '@/components/ui/Toast'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { Clock, X } from 'lucide-react'
-import type { MediaType, SearchResult } from '@/types/media'
+import { Clock, X, Film, Tv, BookOpen } from 'lucide-react'
+import { db } from '@/offline/db'
+import type { MediaType, MediaItem, SearchResult } from '@/types/media'
 
 const GROUP_ORDER: SearchResult['media_type'][] = ['film', 'tv_show', 'anime', 'book']
 const GROUP_LABELS: Record<string, string> = {
@@ -13,12 +16,20 @@ const GROUP_LABELS: Record<string, string> = {
   anime:   'Anime',
   book:    'Books',
 }
-
 const TYPE_LABELS: Record<string, string> = {
   film:    'Movie',
   tv_show: 'TV Series',
   book:    'Book',
   anime:   'Anime',
+}
+const TYPE_PREFIX: Record<string, string> = {
+  film: 'films', tv_show: 'tv', book: 'books', anime: 'anime',
+}
+const FALLBACK_ICONS: Record<string, React.ReactNode> = {
+  film:    <Film size={18} className="text-zinc-700" />,
+  tv_show: <Tv size={18} className="text-zinc-700" />,
+  anime:   <Tv size={18} className="text-zinc-700" />,
+  book:    <BookOpen size={18} className="text-zinc-700" />,
 }
 
 function friendlyMeta(result: SearchResult): string {
@@ -50,14 +61,12 @@ const MAX_RECENTS = 8
 function getRecents(): string[] {
   try { return JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') } catch { return [] }
 }
-
 function saveRecent(q: string) {
   const trimmed = q.trim()
   if (!trimmed) return
   const prev = getRecents().filter((r) => r !== trimmed)
   localStorage.setItem(RECENTS_KEY, JSON.stringify([trimmed, ...prev].slice(0, MAX_RECENTS)))
 }
-
 function removeRecent(q: string) {
   localStorage.setItem(RECENTS_KEY, JSON.stringify(getRecents().filter((r) => r !== q)))
 }
@@ -72,66 +81,71 @@ const TABS = [
 
 type Tab = typeof TABS[number]['value']
 
-function ResultCard({ result, isBestMatch, onAdd }: { result: SearchResult; isBestMatch: boolean; onAdd: (r: SearchResult) => void }) {
+function ResultCard({
+  result,
+  resultIndex,
+  focusedIndex,
+  addingId,
+  existing,
+  onAdd,
+  onNavigate,
+}: {
+  result: SearchResult
+  resultIndex: number
+  focusedIndex: number | null
+  addingId: string | null
+  existing: MediaItem | undefined
+  onAdd: (r: SearchResult) => void
+  onNavigate: (item: MediaItem) => void
+}) {
+  const isFocused = focusedIndex === resultIndex
+  const isAdding = addingId === result.external_id
+  const divRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isFocused) divRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [isFocused])
+
   return (
-    <div className={`flex gap-3 rounded-lg p-3 items-start ring-1 ${isBestMatch ? 'bg-[#1f1f2e] ring-indigo-500/30' : 'bg-[#1a1a1a] ring-white/[0.06]'}`}>
+    <div
+      ref={divRef}
+      className={`flex gap-3 rounded-lg p-3 items-start ring-1 transition-colors ${
+        isFocused
+          ? 'bg-[#1f1f2e] ring-indigo-500/50'
+          : 'bg-[#1a1a1a] ring-white/[0.06]'
+      }`}
+    >
       {result.poster_url ? (
         <img src={result.poster_url} alt="" className="w-12 h-16 object-cover rounded flex-shrink-0" />
       ) : (
-        <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0" />
+        <div className="w-12 h-16 bg-[#222] rounded flex-shrink-0 flex items-center justify-center">
+          {FALLBACK_ICONS[result.media_type]}
+        </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
-          {isBestMatch && (
-            <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">Best Match</span>
-          )}
-        </div>
+        <p className="font-medium text-zinc-100 text-sm">{result.title}</p>
         <p className="text-xs text-zinc-500 mt-0.5">{friendlyMeta(result)}</p>
         {result.description && (
           <p className="text-xs text-zinc-600 mt-1.5 line-clamp-2 leading-relaxed">{result.description}</p>
         )}
       </div>
-      <button
-        onClick={() => onAdd(result)}
-        className="flex-shrink-0 bg-white/8 hover:bg-white/12 text-zinc-200 text-xs px-3 py-1.5 rounded-md transition-colors"
-      >
-        Add
-      </button>
+      {existing ? (
+        <button
+          onClick={() => onNavigate(existing)}
+          className="flex-shrink-0 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 text-xs px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
+        >
+          In Library →
+        </button>
+      ) : (
+        <button
+          onClick={() => onAdd(result)}
+          disabled={isAdding}
+          className="flex-shrink-0 bg-white/[0.08] hover:bg-white/[0.12] disabled:opacity-50 text-zinc-200 text-xs px-3 py-1.5 rounded-md transition-colors"
+        >
+          {isAdding ? '…' : 'Add'}
+        </button>
+      )}
     </div>
-  )
-}
-
-function renderResults(data: SearchResult[], tab: Tab, onAdd: (r: SearchResult) => void) {
-  // On specific tabs, flat list with best match highlight
-  if (tab !== 'multi') {
-    return (
-      <div className="space-y-2">
-        {data.map((result, i) => (
-          <ResultCard key={result.external_id} result={result} isBestMatch={i === 0 && data.length > 1} onAdd={onAdd} />
-        ))}
-      </div>
-    )
-  }
-
-  // On "All" tab, group by media type
-  const grouped = GROUP_ORDER.reduce<Record<string, SearchResult[]>>((acc, type) => {
-    const items = data.filter((r) => r.media_type === type)
-    if (items.length > 0) acc[type] = items
-    return acc
-  }, {})
-
-  return (
-    <>
-      {Object.entries(grouped).map(([type, items]) => (
-        <div key={type} className="space-y-2">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{GROUP_LABELS[type]}</p>
-          {items.map((result, i) => (
-            <ResultCard key={result.external_id} result={result} isBestMatch={i === 0 && items.length > 1} onAdd={onAdd} />
-          ))}
-        </div>
-      ))}
-    </>
   )
 }
 
@@ -140,12 +154,34 @@ export default function Search() {
   const { query, setQuery, data, isFetching } = useSearch(tab)
   const create = useCreateMedia()
   const { show } = useToast()
+  const navigate = useNavigate()
   const [focused, setFocused] = useState(false)
   const [recents, setRecents] = useState<string[]>(getRecents)
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
+  const [addingId, setAddingId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const showRecents = focused && query.length === 0 && recents.length > 0
+
+  // Library lookup — build a Map of external_id → MediaItem for O(1) checks
+  const libraryMap = useLiveQuery(
+    () => db.mediaItems
+      .filter((m) => m.external_id !== null && m.external_id !== undefined)
+      .toArray()
+      .then((items) => new Map(items.filter((m) => m.external_id).map((m) => [m.external_id!, m]))),
+    []
+  ) ?? new Map<string, MediaItem>()
+
+  // Flat ordered result list matching visual render order (for keyboard nav)
+  const flatResults = useMemo(() => {
+    if (!data) return []
+    if (tab !== 'multi') return data
+    return GROUP_ORDER.flatMap((type) => data.filter((r) => r.media_type === type))
+  }, [data, tab])
+
+  // Reset keyboard focus when results change
+  useEffect(() => { setFocusedIndex(null) }, [flatResults])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -174,11 +210,11 @@ export default function Search() {
 
   const handleAdd = async (result: SearchResult) => {
     saveRecent(query.trim())
+    setAddingId(result.external_id)
     try {
       const totalProgress =
         (typeof result.extra?.episodes === 'number' && result.extra.episodes > 0 ? result.extra.episodes : undefined) ??
         (typeof result.extra?.page_count === 'number' && result.extra.page_count > 0 ? result.extra.page_count : undefined)
-
       await create.mutateAsync({
         media_type: result.media_type as MediaType,
         external_id: result.external_id,
@@ -199,7 +235,93 @@ export default function Search() {
       } else {
         show('Server error — is the API running?', 'error')
       }
+    } finally {
+      setAddingId(null)
     }
+  }
+
+  const handleNavigate = (item: MediaItem) => {
+    navigate(`/${TYPE_PREFIX[item.media_type] ?? 'films'}/${item.id}`)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' && flatResults.length > 0) {
+      e.preventDefault()
+      setFocusedIndex((prev) => (prev === null ? 0 : Math.min(prev + 1, flatResults.length - 1)))
+      return
+    }
+    if (e.key === 'ArrowUp' && flatResults.length > 0) {
+      e.preventDefault()
+      setFocusedIndex((prev) => (prev === null || prev === 0 ? null : prev - 1))
+      return
+    }
+    if (e.key === 'Escape') {
+      setFocusedIndex(null)
+      setFocused(false)
+      inputRef.current?.blur()
+      return
+    }
+    if (e.key === 'Enter') {
+      if (focusedIndex !== null && flatResults[focusedIndex]) {
+        const result = flatResults[focusedIndex]
+        const existing = libraryMap.get(result.external_id)
+        if (existing) handleNavigate(existing)
+        else handleAdd(result)
+        return
+      }
+      if (query.trim()) {
+        saveRecent(query.trim())
+        setRecents(getRecents())
+        setFocused(false)
+      }
+    }
+  }
+
+  const renderResults = () => {
+    if (!data || data.length === 0) {
+      if (query.length >= 2 && !isFetching) {
+        return <p className="text-zinc-600 text-sm text-center py-12">No results for "{query}"</p>
+      }
+      return null
+    }
+
+    let idx = 0
+    const card = (result: SearchResult) => {
+      const i = idx++
+      return (
+        <ResultCard
+          key={result.external_id}
+          result={result}
+          resultIndex={i}
+          focusedIndex={focusedIndex}
+          addingId={addingId}
+          existing={libraryMap.get(result.external_id)}
+          onAdd={handleAdd}
+          onNavigate={handleNavigate}
+        />
+      )
+    }
+
+    if (tab !== 'multi') {
+      return <div className="space-y-2">{data.map(card)}</div>
+    }
+
+    const grouped = GROUP_ORDER.reduce<Record<string, SearchResult[]>>((acc, type) => {
+      const items = data.filter((r) => r.media_type === type)
+      if (items.length > 0) acc[type] = items
+      return acc
+    }, {})
+
+    return (
+      <>
+        {Object.entries(grouped).map(([type, items]) => (
+          <div key={type} className="space-y-2">
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{GROUP_LABELS[type]}</p>
+            {items.map(card)}
+          </div>
+        ))}
+      </>
+    )
   }
 
   return (
@@ -210,18 +332,21 @@ export default function Search() {
         <input
           ref={inputRef}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setFocusedIndex(null) }}
           onFocus={() => setFocused(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && query.trim()) {
-              saveRecent(query.trim())
-              setRecents(getRecents())
-              setFocused(false)
-            }
-          }}
+          onKeyDown={handleKeyDown}
           placeholder="Search movies, TV shows, books, anime…"
-          className="w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-4 py-3 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm placeholder:text-zinc-600"
+          className="w-full bg-[#1a1a1a] text-zinc-200 rounded-lg px-4 py-3 border border-white/[0.08] focus:outline-none focus:border-white/20 text-sm placeholder:text-zinc-600 pr-9"
         />
+        {query.length > 0 && (
+          <button
+            onMouseDown={(e) => e.preventDefault()} // keep input focused
+            onClick={() => { setQuery(''); setFocusedIndex(null); inputRef.current?.focus() }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            <X size={14} />
+          </button>
+        )}
         {showRecents && (
           <div ref={dropdownRef} className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/[0.08] rounded-lg overflow-hidden z-20 shadow-lg">
             <p className="text-[10px] text-zinc-600 uppercase tracking-wider px-3 pt-2 pb-1">Recent</p>
@@ -263,12 +388,9 @@ export default function Search() {
 
       {isFetching && <LoadingSpinner />}
 
-      {data && !isFetching && (
+      {!isFetching && (
         <div className="space-y-6">
-          {data.length === 0 && query.length >= 2 && (
-            <p className="text-zinc-600 text-sm text-center py-12">No results for "{query}"</p>
-          )}
-          {renderResults(data, tab, handleAdd)}
+          {renderResults()}
         </div>
       )}
     </div>
