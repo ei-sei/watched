@@ -191,29 +191,28 @@ function AddModal({ item, onClose }: { item: TrendingItem; onClose: () => void }
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Already in library */}
-          {existing && (
-            <button
-              onClick={() => { onClose(); navigate(`/media/${existing.id}`) }}
-              className="w-full text-left bg-indigo-500/10 rounded-lg px-3 py-2.5 ring-1 ring-indigo-500/20 text-sm text-indigo-300 hover:bg-indigo-500/15 transition-colors"
-            >
-              Already in your library →
-            </button>
-          )}
-
           {/* Synopsis */}
           {item.synopsis && (
             <p className="text-xs text-zinc-400 leading-relaxed max-h-36 overflow-y-auto">{item.synopsis}</p>
           )}
 
-          {/* Confirm button */}
-          <button
-            onClick={handleAdd}
-            disabled={create.isPending}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {create.isPending ? 'Adding…' : 'Add to library'}
-          </button>
+          {/* Add / already in library */}
+          {existing ? (
+            <button
+              onClick={() => { onClose(); navigate(`/media/${existing.id}`) }}
+              className="w-full py-2.5 bg-white/[0.06] hover:bg-white/[0.10] text-zinc-300 text-sm font-medium rounded-lg transition-colors"
+            >
+              Already in your library →
+            </button>
+          ) : (
+            <button
+              onClick={handleAdd}
+              disabled={create.isPending}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {create.isPending ? 'Adding…' : 'Add to library'}
+            </button>
+          )}
         </div>
       </div>
     </div>
